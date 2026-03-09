@@ -227,7 +227,7 @@
           "title": "直播间kmj",
           "description": "随机在ks同城直播间发语音kmj（きもちいい 真舒服）主播播放导致下播",
           "coverImage": "https://i.ibb.co/bRqgZVnj/Screen-Shot-2026-03-09-180151-583.png",
-          "videoUrl": "http://hz6.serv00.net/cfee3acbb042381c47b59033f7775c2c.mp4"
+          "videoUrl": "./mp4/zbkmj.mp4"
         },
          {
           "id": 2,
@@ -268,15 +268,28 @@
         config.highlights.forEach(highlight => {
           const card = document.createElement('div');
           card.className = 'highlight-card';
+          
+          // 检查是否有封面图片
+          const hasCoverImage = highlight.coverImage && highlight.coverImage.trim() !== '';
+          const coverImageHTML = hasCoverImage ? 
+            `<img class="cover-image loading" src="${highlight.coverImage}" alt="${highlight.title}" data-video="${highlight.videoUrl}">` : 
+            '<div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: #999;">暂无封面</div>';
+          
+          // 检查是否有视频URL
+          const hasVideoUrl = highlight.videoUrl && highlight.videoUrl.trim() !== '';
+          const playButtonHTML = hasVideoUrl ? 
+            `<button class="play-btn" data-video="${highlight.videoUrl}">播放视频</button>` : 
+            '<button class="play-btn" disabled style="background-color: #999; cursor: not-allowed;">敬请期待</button>';
+          
           card.innerHTML = `
             <div class="image-container">
-              <div class="loading-spinner"></div>
-              <img class="cover-image loading" src="${highlight.coverImage}" alt="${highlight.title}" data-video="${highlight.videoUrl}">
+              ${hasCoverImage ? '<div class="loading-spinner"></div>' : ''}
+              ${coverImageHTML}
             </div>
             <div class="card-content">
               <h3>${highlight.title}</h3>
               <p>${highlight.description}</p>
-              <button class="play-btn" data-video="${highlight.videoUrl}">播放视频</button>
+              ${playButtonHTML}
             </div>
           `;
           container.appendChild(card);
@@ -304,16 +317,22 @@
       document.querySelectorAll('.cover-image').forEach(img => {
         img.addEventListener('click', function() {
           const videoUrl = this.getAttribute('data-video');
-          openVideo(videoUrl);
+          if (videoUrl && videoUrl.trim() !== '') {
+            openVideo(videoUrl);
+          }
         });
       });
 
       // 播放按钮点击事件
       document.querySelectorAll('.play-btn').forEach(btn => {
-        btn.addEventListener('click', function() {
-          const videoUrl = this.getAttribute('data-video');
-          openVideo(videoUrl);
-        });
+        if (!btn.hasAttribute('disabled')) {
+          btn.addEventListener('click', function() {
+            const videoUrl = this.getAttribute('data-video');
+            if (videoUrl && videoUrl.trim() !== '') {
+              openVideo(videoUrl);
+            }
+          });
+        }
       });
     }
 
@@ -341,6 +360,12 @@
     // 打开视频
     function openVideo(videoUrl) {
       try {
+        // 验证视频URL
+        if (!videoUrl || videoUrl.trim() === '') {
+          alert('视频链接无效，请稍后再试');
+          return;
+        }
+        
         // 确保先关闭之前的视频
         closeVideo();
         
@@ -381,6 +406,13 @@
           preload: 'auto',
           responsive: true,
           fluid: true
+        });
+        
+        // 添加错误处理
+        currentPlayer.on('error', function() {
+          console.error('视频加载失败:', currentPlayer.error());
+          alert('视频加载失败，可能是因为网络问题或格式不支持');
+          closeVideo();
         });
         
         // 设置视频源并播放
