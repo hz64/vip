@@ -320,16 +320,18 @@ const App = {
       </div>
     `;
     
+    const self = this;
+    
     setTimeout(() => {
       container.innerHTML = '';
       
-      const totalPages = Math.ceil(this.videos.length / this.videosPerPage);
-      if (this.currentPage > totalPages && totalPages > 0) {
-        this.currentPage = totalPages;
+      const totalPages = Math.ceil(self.videos.length / self.videosPerPage);
+      if (self.currentPage > totalPages && totalPages > 0) {
+        self.currentPage = totalPages;
       }
       
-      const startIndex = (this.currentPage - 1) * this.videosPerPage;
-      const currentVideos = this.videos.slice(startIndex, startIndex + this.videosPerPage);
+      const startIndex = (self.currentPage - 1) * self.videosPerPage;
+      const currentVideos = self.videos.slice(startIndex, startIndex + self.videosPerPage);
       
       if (currentVideos.length === 0) {
         container.innerHTML = '<p style="text-align: center; color: #999; padding: 40px;">暂无视频</p>';
@@ -363,9 +365,9 @@ const App = {
         container.appendChild(card);
       });
       
-      this.lazyLoadImages();
-      this.renderPagination();
-      this.bindVideoEvents();
+      self.lazyLoadImages();
+      self.renderPagination();
+      self.bindVideoEvents();
     }, 100);
   },
   
