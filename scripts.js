@@ -8,29 +8,7 @@ let walineInstance = null;
 
 function getUrlParam(name) {
   const urlParams = new URLSearchParams(window.location.search);
-  const value = urlParams.get(name);
-  
-  if (name === 'id') {
-    const num = parseInt(value, 10);
-    if (isNaN(num) || num < 1 || num > maxVideoId) {
-      return null;
-    }
-    return num;
-  }
-  
-  if (name === 'page') {
-    const num = parseInt(value, 10);
-    if (isNaN(num) || num < 1) {
-      return 1;
-    }
-    return num;
-  }
-  
-  return value;
-}
-
-function updatePageTitle(title) {
-  document.title = title ? `${title} - 历史高光` : '历史高光';
+  return urlParams.get(name);
 }
 
 async function loadVideoData(videoId) {
@@ -177,8 +155,6 @@ function showListPage() {
   if (listPage) listPage.style.display = 'block';
   if (videoPage) videoPage.style.display = 'none';
   
-  updatePageTitle(null);
-  
   const url = new URL(window.location.href);
   url.searchParams.delete('id');
   window.history.replaceState({}, '', url);
@@ -192,13 +168,9 @@ function showListPage() {
 async function showVideoPage(videoId) {
   const listPage = document.getElementById('list-page');
   const videoPage = document.getElementById('video-page');
-  const videoLoading = document.getElementById('video-loading');
-  const videoPlayer = document.getElementById('video-player');
   
   if (listPage) listPage.style.display = 'none';
   if (videoPage) videoPage.style.display = 'block';
-  if (videoLoading) videoLoading.style.display = 'flex';
-  if (videoPlayer) videoPlayer.style.display = 'none';
   
   const videoData = await loadVideoData(videoId);
   
@@ -213,8 +185,6 @@ async function showVideoPage(videoId) {
   
   if (titleEl) titleEl.textContent = videoData.title || `视频${videoId}`;
   if (descEl) descEl.textContent = videoData.description || '';
-  
-  updatePageTitle(videoData.title || `视频${videoId}`);
   
   initWaline(videoId);
   
@@ -396,14 +366,12 @@ function setupVideo(videoUrl) {
   try {
     if (!videoUrl || videoUrl.trim() === '') {
       alert('视频链接无效，请稍后再试');
-      hideVideoLoading();
       return;
     }
     
     const videoPlayer = document.getElementById('video-player');
     if (!videoPlayer) {
       console.error('视频播放器不存在');
-      hideVideoLoading();
       return;
     }
     
@@ -422,11 +390,6 @@ function setupVideo(videoUrl) {
     currentPlayer.on('error', function() {
       console.error('视频加载失败');
       alert('视频加载失败，请稍后再试');
-      hideVideoLoading();
-    });
-    
-    currentPlayer.on('loadeddata', function() {
-      hideVideoLoading();
     });
     
     currentPlayer.src({
@@ -437,13 +400,5 @@ function setupVideo(videoUrl) {
   } catch (error) {
     console.error('设置视频失败:', error);
     alert('视频设置失败，请稍后再试');
-    hideVideoLoading();
   }
-}
-
-function hideVideoLoading() {
-  const videoLoading = document.getElementById('video-loading');
-  const videoPlayer = document.getElementById('video-player');
-  if (videoLoading) videoLoading.style.display = 'none';
-  if (videoPlayer) videoPlayer.style.display = 'block';
 }
