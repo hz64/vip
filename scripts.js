@@ -189,7 +189,7 @@ async function showVideoPage(videoId) {
   initWaline(videoId);
   
   if (videoData.videoUrl && videoData.videoUrl.trim() !== '') {
-    openVideo(videoData.videoUrl);
+    setupVideo(videoData.videoUrl);
   } else {
     alert('视频链接无效');
     showListPage();
@@ -199,48 +199,57 @@ async function showVideoPage(videoId) {
 function renderVideoList() {
   const container = document.getElementById('highlights-container');
   if (container) {
-    container.innerHTML = '';
+    container.innerHTML = `
+      <div class="loading-container">
+        <div class="loading-spinner-large"></div>
+        <div class="loading-text">加载中...</div>
+      </div>
+    `;
     
-    const startIndex = (currentPage - 1) * videosPerPage;
-    const endIndex = startIndex + videosPerPage;
-    const currentVideos = videos.slice(startIndex, endIndex);
-    
-    if (currentVideos.length === 0) {
-      container.innerHTML = '<p style="text-align: center; color: #999;">暂无视频</p>';
-      return;
-    }
-    
-    currentVideos.forEach(video => {
-      const card = document.createElement('div');
-      card.className = 'highlight-card';
+    setTimeout(() => {
+      container.innerHTML = '';
       
-      const hasCoverImage = video.coverImage && video.coverImage.trim() !== '';
-      const coverImageHTML = hasCoverImage ? 
-        `<img class="cover-image loading" src="" data-src="${video.coverImage}" alt="${video.title}" loading="lazy">` : 
-        '<div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: #999;">暂无封面</div>';
+      const startIndex = (currentPage - 1) * videosPerPage;
+      const endIndex = startIndex + videosPerPage;
+      const currentVideos = videos.slice(startIndex, endIndex);
       
-      const hasVideoUrl = video.videoUrl && video.videoUrl.trim() !== '';
-      const playButtonHTML = hasVideoUrl ? 
-        `<button class="play-btn" data-id="${video.id}">播放视频</button>` : 
-        '<button class="play-btn" disabled style="background-color: #999; cursor: not-allowed;">敬请期待</button>';
+      if (currentVideos.length === 0) {
+        container.innerHTML = '<p style="text-align: center; color: #999;">暂无视频</p>';
+        return;
+      }
       
-      card.innerHTML = `
-        <div class="image-container" data-id="${video.id}">
-          ${hasCoverImage ? '<div class="loading-spinner"></div>' : ''}
-          ${coverImageHTML}
-        </div>
-        <div class="card-content">
-          <h3>${video.title}</h3>
-          <p>${video.description}</p>
-          ${playButtonHTML}
-        </div>
-      `;
-      container.appendChild(card);
-    });
+      currentVideos.forEach(video => {
+        const card = document.createElement('div');
+        card.className = 'highlight-card';
+        
+        const hasCoverImage = video.coverImage && video.coverImage.trim() !== '';
+        const coverImageHTML = hasCoverImage ? 
+          `<img class="cover-image loading" src="" data-src="${video.coverImage}" alt="${video.title}" loading="lazy">` : 
+          '<div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: #999;">暂无封面</div>';
+        
+        const hasVideoUrl = video.videoUrl && video.videoUrl.trim() !== '';
+        const playButtonHTML = hasVideoUrl ? 
+          `<button class="play-btn" data-id="${video.id}">播放视频</button>` : 
+          '<button class="play-btn" disabled style="background-color: #999; cursor: not-allowed;">敬请期待</button>';
+        
+        card.innerHTML = `
+          <div class="image-container" data-id="${video.id}">
+            ${hasCoverImage ? '<div class="loading-spinner"></div>' : ''}
+            ${coverImageHTML}
+          </div>
+          <div class="card-content">
+            <h3>${video.title}</h3>
+            <p>${video.description}</p>
+            ${playButtonHTML}
+          </div>
+        `;
+        container.appendChild(card);
+      });
 
-    lazyLoadImages();
-    renderPagination();
-    bindVideoEvents();
+      lazyLoadImages();
+      renderPagination();
+      bindVideoEvents();
+    }, 100);
   }
 }
 
@@ -353,7 +362,7 @@ function bindCloseEvents() {
   }
 }
 
-function openVideo(videoUrl) {
+function setupVideo(videoUrl) {
   try {
     if (!videoUrl || videoUrl.trim() === '') {
       alert('视频链接无效，请稍后再试');
@@ -372,8 +381,8 @@ function openVideo(videoUrl) {
     
     currentPlayer = videojs('video-player', {
       controls: true,
-      autoplay: true,
-      preload: 'auto',
+      autoplay: false,
+      preload: 'none',
       fluid: true,
       responsive: true
     });
@@ -388,12 +397,8 @@ function openVideo(videoUrl) {
       type: 'video/mp4'
     });
     
-    currentPlayer.play().catch(function(error) {
-      console.log('自动播放失败:', error);
-    });
-    
   } catch (error) {
-    console.error('打开视频失败:', error);
-    alert('视频播放失败，请稍后再试');
+    console.error('设置视频失败:', error);
+    alert('视频设置失败，请稍后再试');
   }
 }

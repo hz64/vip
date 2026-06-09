@@ -21,17 +21,21 @@
   </div>
 
   <div id="video-page" style="display: none;">
+    <header>
+      <h1>历史高光</h1>
+      <p>偷着乐</p>
+    </header>
     <div class="container">
-      <button class="back-btn" id="back-btn"><</button>
+      <button class="back-btn" id="back-btn">← 返回列表</button>
       <div class="video-card">
+        <div class="video-details">
+          <h2 id="video-title"></h2>
+          <p id="video-description"></p>
+        </div>
         <div class="video-player-wrapper">
           <video id="video-player" class="video-js vjs-default-skin vjs-big-play-centered">
             <p class="vjs-no-js">要观看此视频，请启用JavaScript</p>
           </video>
-        </div>
-        <div class="video-details">
-          <h2 id="video-title"></h2>
-          <p id="video-description"></p>
         </div>
       </div>
       <div class="comments-section">
