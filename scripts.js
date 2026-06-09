@@ -230,6 +230,8 @@ function showListPage(restoreScroll = true) {
   }
   
   document.title = '历史高光';
+  
+  renderVideoList();
 }
 
 async function showVideoPage(videoId) {
