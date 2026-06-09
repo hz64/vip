@@ -257,6 +257,10 @@
     let currentPage = 1;
     // 每页显示的视频数量
     const videosPerPage = 5;
+    // 视频数据缓存
+    const videoDataCache = new Map();
+    // 最大尝试的视频ID
+    const maxVideoId = 50; // 防止无限循环
 
     // 从URL获取参数
     function getUrlParam(name) {
@@ -264,41 +268,62 @@
       return urlParams.get(name);
     }
 
-    // 加载单个视频的JSON数据
+    // 加载单个视频的JSON数据（带缓存）
     async function loadVideoData(videoId) {
+      // 检查缓存
+      if (videoDataCache.has(videoId)) {
+        return videoDataCache.get(videoId);
+      }
+      
       try {
         const response = await fetch(`data/${videoId}.json`);
         if (!response.ok) {
           throw new Error(`无法加载视频 ${videoId}`);
         }
-        return await response.json();
+        const data = await response.json();
+        // 存入缓存
+        videoDataCache.set(videoId, data);
+        return data;
       } catch (error) {
         console.error('加载视频数据失败:', error);
+        // 缓存失败结果，避免重复请求
+        videoDataCache.set(videoId, null);
         return null;
       }
     }
 
-    // 自动扫描data目录中的所有JSON文件
+    // 自动扫描data目录中的所有JSON文件（并行加载）
     async function scanVideoFiles() {
-      // 假设JSON文件从1开始连续编号
       const videoList = [];
-      let videoId = 1;
+      const loadPromises = [];
       
-      while (true) {
-        const videoData = await loadVideoData(videoId);
-        if (videoData) {
-          videoList.push({
-            id: videoId,
-            title: videoData.title || `视频${videoId}`,
-            description: videoData.description || '',
-            coverImage: videoData.coverImage || '',
-            videoUrl: videoData.videoUrl || ''
-          });
-          videoId++;
-        } else {
-          break;
-        }
+      // 创建所有加载请求
+      for (let videoId = 1; videoId <= maxVideoId; videoId++) {
+        loadPromises.push(
+          loadVideoData(videoId).then(data => {
+            if (data) {
+              return {
+                id: videoId,
+                title: data.title || `视频${videoId}`,
+                description: data.description || '',
+                coverImage: data.coverImage || '',
+                videoUrl: data.videoUrl || ''
+              };
+            }
+            return null;
+          })
+        );
       }
+      
+      // 并行加载所有视频数据
+      const results = await Promise.all(loadPromises);
+      
+      // 过滤掉null结果并按ID排序
+      results.forEach(result => {
+        if (result) {
+          videoList.push(result);
+        }
+      });
       
       return videoList;
     }
@@ -367,7 +392,7 @@
           
           const hasCoverImage = video.coverImage && video.coverImage.trim() !== '';
           const coverImageHTML = hasCoverImage ? 
-            `<img class="cover-image loading" src="${video.coverImage}" alt="${video.title}" data-id="${video.id}" data-video="${video.videoUrl}">` : 
+            `<img class="cover-image loading" src="" data-src="${video.coverImage}" alt="${video.title}" data-id="${video.id}" data-video="${video.videoUrl}" loading="lazy">` : 
             '<div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: #999;">暂无封面</div>';
           
           const hasVideoUrl = video.videoUrl && video.videoUrl.trim() !== '';
@@ -389,16 +414,8 @@
           container.appendChild(card);
         });
 
-        // 为图片添加加载完成事件
-        document.querySelectorAll('.cover-image').forEach(img => {
-          img.addEventListener('load', function() {
-            this.classList.remove('loading');
-            const spinner = this.parentElement.querySelector('.loading-spinner');
-            if (spinner) {
-              spinner.style.display = 'none';
-            }
-          });
-        });
+        // 懒加载图片
+        lazyLoadImages();
         
         // 绲染分页导航
         renderPagination();
@@ -406,6 +423,53 @@
         // 绑定事件监听器
         bindVideoEvents();
       }
+    }
+    
+    // 懒加载图片
+    function lazyLoadImages() {
+      const images = document.querySelectorAll('.cover-image[data-src]');
+      
+      const imageObserver = new IntersectionObserver((entries, observer) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            const img = entry.target;
+            const src = img.getAttribute('data-src');
+            
+            if (src) {
+              img.src = src;
+              img.addEventListener('load', function() {
+                this.classList.remove('loading');
+                const spinner = this.parentElement.querySelector('.loading-spinner');
+                if (spinner) {
+                  spinner.style.display = 'none';
+                }
+              });
+              
+              img.addEventListener('error', function() {
+                this.style.display = 'none';
+                const container = this.parentElement;
+                const noCoverDiv = document.createElement('div');
+                noCoverDiv.style.cssText = 'width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: #999;';
+                noCoverDiv.textContent = '暂无封面';
+                container.appendChild(noCoverDiv);
+                const spinner = container.querySelector('.loading-spinner');
+                if (spinner) {
+                  spinner.style.display = 'none';
+                }
+              });
+            }
+            
+            observer.unobserve(img);
+          }
+        });
+      }, {
+        rootMargin: '50px 0px',
+        threshold: 0.1
+      });
+      
+      images.forEach(img => {
+        imageObserver.observe(img);
+      });
     }
     
     // 渲染分页导航
