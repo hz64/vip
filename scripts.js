@@ -5,14 +5,10 @@ const App = {
   videosPerPage: 5,
   videoDataCache: new Map(),
   walineInstance: null,
-  currentVideoId: null,
-  debounceTimer: null,
   
   init() {
     window.addEventListener('DOMContentLoaded', () => this.handleDOMContentLoaded());
     window.addEventListener('popstate', (e) => this.handlePopState(e));
-    document.addEventListener('keydown', (e) => this.handleKeydown(e));
-    document.addEventListener('visibilitychange', () => this.handleVisibilityChange());
   },
   
   handleDOMContentLoaded() {
@@ -166,15 +162,8 @@ const App = {
   },
   
   async showVideoPage(videoId) {
-    this.currentVideoId = videoId;
-    
     document.getElementById('list-page')?.style.setProperty('display', 'none');
-    const videoPage = document.getElementById('video-page');
-    if (videoPage) {
-      videoPage.style.setProperty('display', 'block');
-      videoPage.style.opacity = '0';
-      setTimeout(() => { videoPage.style.opacity = '1'; }, 50);
-    }
+    document.getElementById('video-page')?.style.setProperty('display', 'block');
     
     this.showVideoLoading();
     
@@ -191,9 +180,6 @@ const App = {
       
       document.title = `${videoData.title || '视频'} - 历史高光`;
       
-      this.updateNavigationButtons();
-      this.bindShareButton();
-      
       this.initWaline(videoId);
       
       if (videoData.videoUrl?.trim()) {
@@ -205,87 +191,6 @@ const App = {
     } catch (error) {
       console.error('显示视频页面失败:', error);
       this.showError(error.message);
-    }
-  },
-  
-  handleKeydown(e) {
-    if (e.key === 'Escape' && document.getElementById('video-page')?.style.display === 'block') {
-      this.showListPage();
-    }
-    
-    if (e.key === 'ArrowLeft' && this.currentVideoId) {
-      e.preventDefault();
-      this.navigateVideo(-1);
-    }
-    
-    if (e.key === 'ArrowRight' && this.currentVideoId) {
-      e.preventDefault();
-      this.navigateVideo(1);
-    }
-  },
-  
-  handleVisibilityChange() {
-    if (document.hidden && this.currentPlayer) {
-      this.currentPlayer.pause();
-    }
-  },
-  
-  navigateVideo(direction) {
-    const currentIndex = this.videos.findIndex(v => v.id === this.currentVideoId);
-    if (currentIndex === -1) return;
-    
-    const newIndex = currentIndex + direction;
-    if (newIndex >= 0 && newIndex < this.videos.length) {
-      window.location.href = `?id=${this.videos[newIndex].id}`;
-    }
-  },
-  
-  updateNavigationButtons() {
-    const currentIndex = this.videos.findIndex(v => v.id === this.currentVideoId);
-    const prevBtn = document.getElementById('prev-video');
-    const nextBtn = document.getElementById('next-video');
-    
-    if (prevBtn) {
-      prevBtn.disabled = currentIndex <= 0;
-      prevBtn.onclick = () => this.navigateVideo(-1);
-    }
-    
-    if (nextBtn) {
-      nextBtn.disabled = currentIndex >= this.videos.length - 1;
-      nextBtn.onclick = () => this.navigateVideo(1);
-    }
-  },
-  
-  bindShareButton() {
-    const shareBtn = document.getElementById('share-btn');
-    if (shareBtn) {
-      shareBtn.onclick = async () => {
-        const shareUrl = window.location.href;
-        const shareText = document.getElementById('video-title')?.textContent || '视频';
-        
-        if (navigator.share) {
-          try {
-            await navigator.share({
-              title: shareText,
-              url: shareUrl
-            });
-          } catch (err) {
-            console.log('分享取消');
-          }
-        } else {
-          this.copyToClipboard(shareUrl);
-        }
-      };
-    }
-  },
-  
-  async copyToClipboard(text) {
-    try {
-      await navigator.clipboard.writeText(text);
-      alert('链接已复制到剪贴板！');
-    } catch (err) {
-      console.error('复制失败:', err);
-      alert('复制失败，请手动复制链接');
     }
   },
   
@@ -320,18 +225,16 @@ const App = {
       </div>
     `;
     
-    const self = this;
-    
     setTimeout(() => {
       container.innerHTML = '';
       
-      const totalPages = Math.ceil(self.videos.length / self.videosPerPage);
-      if (self.currentPage > totalPages && totalPages > 0) {
-        self.currentPage = totalPages;
+      const totalPages = Math.ceil(this.videos.length / this.videosPerPage);
+      if (this.currentPage > totalPages && totalPages > 0) {
+        this.currentPage = totalPages;
       }
       
-      const startIndex = (self.currentPage - 1) * self.videosPerPage;
-      const currentVideos = self.videos.slice(startIndex, startIndex + self.videosPerPage);
+      const startIndex = (this.currentPage - 1) * this.videosPerPage;
+      const currentVideos = this.videos.slice(startIndex, startIndex + this.videosPerPage);
       
       if (currentVideos.length === 0) {
         container.innerHTML = '<p style="text-align: center; color: #999; padding: 40px;">暂无视频</p>';
@@ -365,9 +268,9 @@ const App = {
         container.appendChild(card);
       });
       
-      self.lazyLoadImages();
-      self.renderPagination();
-      self.bindVideoEvents();
+      this.lazyLoadImages();
+      this.renderPagination();
+      this.bindVideoEvents();
     }, 100);
   },
   
