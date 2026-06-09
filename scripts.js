@@ -211,6 +211,16 @@ async function showVideoPage(videoId) {
   }
 }
 
+function bindCloseEvents() {
+  const backBtn = document.getElementById('back-btn');
+  if (backBtn) {
+    backBtn.addEventListener('click', function() {
+      showListPage();
+      initWalineList();
+    });
+  }
+}
+
 function renderVideoList() {
   const container = document.getElementById('highlights-container');
   if (container) {
@@ -387,28 +397,10 @@ function openVideo(videoUrl) {
     
     closeVideo();
     
-    const videoPage = document.getElementById('video-page');
-    const videoWrapper = videoPage ? videoPage.querySelector('.video-wrapper') : null;
-    
-    if (!videoPage || !videoWrapper) {
-      console.error('视频页面或包装器不存在');
+    const videoPlayer = document.getElementById('video-player');
+    if (!videoPlayer) {
+      console.error('视频播放器不存在');
       return;
-    }
-    
-    const oldVideoElement = document.getElementById('video-player');
-    if (oldVideoElement) videoWrapper.removeChild(oldVideoElement);
-    
-    const newVideoElement = document.createElement('video');
-    newVideoElement.id = 'video-player';
-    newVideoElement.className = 'video-js vjs-default-skin vjs-big-play-centered';
-    newVideoElement.controls = true;
-    newVideoElement.innerHTML = '<p class="vjs-no-js">要观看此视频，请启用JavaScript，并考虑升级到支持HTML5视频的Web浏览器</p>';
-    
-    const closeBtn = document.getElementById('close-btn');
-    if (closeBtn) {
-      videoWrapper.insertBefore(newVideoElement, closeBtn);
-    } else {
-      videoWrapper.appendChild(newVideoElement);
     }
     
     currentPlayer = videojs('video-player', {
@@ -422,15 +414,10 @@ function openVideo(videoUrl) {
     currentPlayer.on('error', function() {
       console.error('视频加载失败:', currentPlayer.error());
       alert('视频加载失败，可能是因为网络问题或格式不支持');
-      closeVideo();
-      showListPage();
     });
     
     currentPlayer.src(videoUrl);
     currentPlayer.play();
-    
-    videoPage.style.display = 'block';
-    document.body.style.overflow = 'hidden';
   } catch (error) {
     console.error('打开视频失败:', error);
     alert('视频播放失败，请稍后再试');
@@ -446,30 +433,6 @@ function closeVideo() {
     }
     
     updateUrlParam(null);
-    
-    const videoPage = document.getElementById('video-page');
-    const videoWrapper = videoPage ? videoPage.querySelector('.video-wrapper') : null;
-    
-    if (!videoPage || !videoWrapper) return;
-    
-    const oldVideoElement = document.getElementById('video-player');
-    if (oldVideoElement) videoWrapper.removeChild(oldVideoElement);
-    
-    const newVideoElement = document.createElement('video');
-    newVideoElement.id = 'video-player';
-    newVideoElement.className = 'video-js vjs-default-skin vjs-big-play-centered';
-    newVideoElement.controls = true;
-    newVideoElement.innerHTML = '<p class="vjs-no-js">要观看此视频，请启用JavaScript，并考虑升级到支持HTML5视频的Web浏览器</p>';
-    
-    const closeBtn = document.getElementById('close-btn');
-    if (closeBtn) {
-      videoWrapper.insertBefore(newVideoElement, closeBtn);
-    } else {
-      videoWrapper.appendChild(newVideoElement);
-    }
-    
-    videoPage.style.display = 'none';
-    document.body.style.overflow = 'auto';
   } catch (error) {
     console.error('关闭视频失败:', error);
   }

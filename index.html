@@ -25,17 +25,18 @@
   </div>
 
   <div id="video-page" style="display: none;">
-    <div class="video-container">
-      <div class="video-wrapper">
-        <button class="close-btn" id="close-btn">×</button>
+    <div class="container">
+      <div class="video-card">
         <button class="back-btn" id="back-btn">← 返回列表</button>
-        <video id="video-player" class="video-js vjs-default-skin vjs-big-play-centered" controls preload="auto">
-          <p class="vjs-no-js">要观看此视频，请启用JavaScript，并考虑升级到支持HTML5视频的Web浏览器</p>
-        </video>
-      </div>
-      <div class="video-info" id="video-info">
-        <h2 id="video-title"></h2>
-        <p id="video-description"></p>
+        <div class="video-player-wrapper">
+          <video id="video-player" class="video-js vjs-default-skin vjs-big-play-centered" controls preload="auto">
+            <p class="vjs-no-js">要观看此视频，请启用JavaScript，并考虑升级到支持HTML5视频的Web浏览器</p>
+          </video>
+        </div>
+        <div class="video-details">
+          <h2 id="video-title"></h2>
+          <p id="video-description"></p>
+        </div>
       </div>
       <div class="comments-section">
         <h3>评论区</h3>
