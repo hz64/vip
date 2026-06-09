@@ -5,7 +5,6 @@ const videosPerPage = 5;
 const videoDataCache = new Map();
 const maxVideoId = 50;
 let walineInstance = null;
-let walineListInstance = null;
 
 function getUrlParam(name) {
   const urlParams = new URLSearchParams(window.location.search);
@@ -65,46 +64,24 @@ function initWaline(videoId) {
   });
 }
 
-function initWalineList() {
-  const container = document.getElementById('waline-list-container');
-  if (!container) return;
-  
-  if (walineListInstance) {
-    walineListInstance.destroy();
-    walineListInstance = null;
-  }
-  
-  walineListInstance = Waline.init({
-    el: '#waline-list-container',
-    serverURL: 'https://pl-iota-three.vercel.app/',
-    path: 'home',
-    lang: 'zh-CN',
-    dark: 'auto',
-    comment: true,
-    requiredMeta: ['nick', 'mail'],
-    visitor: true,
-    pageSize: 10,
-    placeholder: '说点什么吧...',
-    uploadImage: false,
-    emoji: [
-      'https://unpkg.com/@waline/emojis@1.1.0/weibo',
-      'https://unpkg.com/@waline/emojis@1.1.0/bilibili',
-    ],
-    requiredFields: ['nick', 'mail'],
-    wordLimit: '[0, 200]',
-    preview: { isMobile: false },
-    meta: ['nick', 'mail', 'link'],
-    copyright: true,
-  });
-}
-
 async function scanVideoFiles() {
   const videoList = [];
-  const loadPromises = [];
   
-  for (let videoId = 1; videoId <= maxVideoId; videoId++) {
-    loadPromises.push(
-      loadVideoData(videoId).then(data => {
+  try {
+    const response = await fetch('data/index.json');
+    if (!response.ok) {
+      throw new Error('无法加载索引文件');
+    }
+    const indexData = await response.json();
+    const videoIds = indexData.videos || [];
+    
+    if (videoIds.length === 0) {
+      console.log('索引文件为空');
+      return videoList;
+    }
+    
+    const loadPromises = videoIds.map(videoId => {
+      return loadVideoData(videoId).then(data => {
         if (data) {
           return {
             id: videoId,
@@ -115,16 +92,20 @@ async function scanVideoFiles() {
           };
         }
         return null;
-      })
-    );
+      });
+    });
+    
+    const results = await Promise.all(loadPromises);
+    results.forEach(result => {
+      if (result) {
+        videoList.push(result);
+      }
+    });
+    
+  } catch (error) {
+    console.error('加载索引文件失败:', error);
+    return videoList;
   }
-  
-  const results = await Promise.all(loadPromises);
-  results.forEach(result => {
-    if (result) {
-      videoList.push(result);
-    }
-  });
   
   return videoList;
 }
@@ -162,7 +143,6 @@ window.addEventListener('DOMContentLoaded', async function() {
     }
     
     renderVideoList();
-    initWalineList();
   }
   
   bindCloseEvents();
@@ -178,6 +158,11 @@ function showListPage() {
   const url = new URL(window.location.href);
   url.searchParams.delete('id');
   window.history.replaceState({}, '', url);
+  
+  if (currentPlayer) {
+    currentPlayer.pause();
+    currentPlayer = null;
+  }
 }
 
 async function showVideoPage(videoId) {
@@ -211,16 +196,6 @@ async function showVideoPage(videoId) {
   }
 }
 
-function bindCloseEvents() {
-  const backBtn = document.getElementById('back-btn');
-  if (backBtn) {
-    backBtn.addEventListener('click', function() {
-      showListPage();
-      initWalineList();
-    });
-  }
-}
-
 function renderVideoList() {
   const container = document.getElementById('highlights-container');
   if (container) {
@@ -241,7 +216,7 @@ function renderVideoList() {
       
       const hasCoverImage = video.coverImage && video.coverImage.trim() !== '';
       const coverImageHTML = hasCoverImage ? 
-        `<img class="cover-image loading" src="" data-src="${video.coverImage}" alt="${video.title}" data-id="${video.id}" data-video="${video.videoUrl}" loading="lazy">` : 
+        `<img class="cover-image loading" src="" data-src="${video.coverImage}" alt="${video.title}" loading="lazy">` : 
         '<div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: #999;">暂无封面</div>';
       
       const hasVideoUrl = video.videoUrl && video.videoUrl.trim() !== '';
@@ -250,7 +225,7 @@ function renderVideoList() {
         '<button class="play-btn" disabled style="background-color: #999; cursor: not-allowed;">敬请期待</button>';
       
       card.innerHTML = `
-        <div class="image-container">
+        <div class="image-container" data-id="${video.id}">
           ${hasCoverImage ? '<div class="loading-spinner"></div>' : ''}
           ${coverImageHTML}
         </div>
@@ -349,8 +324,8 @@ function goToPage(page) {
 }
 
 function bindVideoEvents() {
-  document.querySelectorAll('.cover-image').forEach(img => {
-    img.addEventListener('click', function() {
+  document.querySelectorAll('.image-container').forEach(container => {
+    container.addEventListener('click', function() {
       const videoId = this.getAttribute('data-id');
       if (videoId) {
         window.location.href = `?id=${videoId}`;
@@ -361,7 +336,8 @@ function bindVideoEvents() {
   document.querySelectorAll('.play-btn').forEach(btn => {
     const videoId = btn.getAttribute('data-id');
     if (videoId) {
-      btn.addEventListener('click', function() {
+      btn.addEventListener('click', function(e) {
+        e.stopPropagation();
         window.location.href = `?id=${videoId}`;
       });
     }
@@ -369,21 +345,10 @@ function bindVideoEvents() {
 }
 
 function bindCloseEvents() {
-  const closeBtn = document.getElementById('close-btn');
-  if (closeBtn) {
-    closeBtn.addEventListener('click', function() {
-      closeVideo();
-      showListPage();
-      initWalineList();
-    });
-  }
-  
   const backBtn = document.getElementById('back-btn');
   if (backBtn) {
     backBtn.addEventListener('click', function() {
-      closeVideo();
       showListPage();
-      initWalineList();
     });
   }
 }
@@ -395,45 +360,40 @@ function openVideo(videoUrl) {
       return;
     }
     
-    closeVideo();
-    
     const videoPlayer = document.getElementById('video-player');
     if (!videoPlayer) {
       console.error('视频播放器不存在');
       return;
     }
     
+    if (currentPlayer) {
+      currentPlayer.dispose();
+    }
+    
     currentPlayer = videojs('video-player', {
       controls: true,
       autoplay: true,
       preload: 'auto',
-      responsive: true,
-      fluid: true
+      fluid: true,
+      responsive: true
     });
     
     currentPlayer.on('error', function() {
-      console.error('视频加载失败:', currentPlayer.error());
-      alert('视频加载失败，可能是因为网络问题或格式不支持');
+      console.error('视频加载失败');
+      alert('视频加载失败，请稍后再试');
     });
     
-    currentPlayer.src(videoUrl);
-    currentPlayer.play();
+    currentPlayer.src({
+      src: videoUrl,
+      type: 'video/mp4'
+    });
+    
+    currentPlayer.play().catch(function(error) {
+      console.log('自动播放失败:', error);
+    });
+    
   } catch (error) {
     console.error('打开视频失败:', error);
     alert('视频播放失败，请稍后再试');
-  }
-}
-
-function closeVideo() {
-  try {
-    if (currentPlayer) {
-      currentPlayer.pause();
-      currentPlayer.dispose();
-      currentPlayer = null;
-    }
-    
-    updateUrlParam(null);
-  } catch (error) {
-    console.error('关闭视频失败:', error);
   }
 }

@@ -5,32 +5,28 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>历史高光</title>
   <link href="https://vjs.zencdn.net/7.15.4/video-js.css" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@waline/client@2/dist/waline.css" />
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <div id="list-page">
     <div class="container">
       <header>
-        <h1 id="page-title">历史高光</h1>
+        <h1>历史高光</h1>
         <p>偷着乐</p>
       </header>
       <div class="highlights-grid" id="highlights-container"></div>
       <div class="pagination" id="pagination"></div>
-      <div class="comments-section">
-        <h3>评论区</h3>
-        <div id="waline-list-container"></div>
-      </div>
     </div>
   </div>
 
   <div id="video-page" style="display: none;">
     <div class="container">
+      <button class="back-btn" id="back-btn"><</button>
       <div class="video-card">
-        <button class="back-btn" id="back-btn">← 返回列表</button>
         <div class="video-player-wrapper">
-          <video id="video-player" class="video-js vjs-default-skin vjs-big-play-centered" controls preload="auto">
-            <p class="vjs-no-js">要观看此视频，请启用JavaScript，并考虑升级到支持HTML5视频的Web浏览器</p>
+          <video id="video-player" class="video-js vjs-default-skin vjs-big-play-centered">
+            <p class="vjs-no-js">要观看此视频，请启用JavaScript</p>
           </video>
         </div>
         <div class="video-details">
@@ -46,7 +42,7 @@
   </div>
 
   <script src="https://vjs.zencdn.net/7.15.4/video.min.js"></script>
-  <script src="scripts.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@waline/client@2/dist/waline.js"></script>
+  <script src="scripts.js"></script>
 </body>
 </html>
