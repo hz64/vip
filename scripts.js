@@ -3,12 +3,29 @@ let currentPlayer = null;
 let currentPage = 1;
 const videosPerPage = 5;
 const videoDataCache = new Map();
-const maxVideoId = 50;
 let walineInstance = null;
 
 function getUrlParam(name) {
   const urlParams = new URLSearchParams(window.location.search);
-  return urlParams.get(name);
+  let value = urlParams.get(name);
+  
+  if (name === 'id') {
+    const num = parseInt(value, 10);
+    if (isNaN(num) || num < 1 || num > 1000) {
+      return null;
+    }
+    return num;
+  }
+  
+  if (name === 'page') {
+    const num = parseInt(value, 10);
+    if (isNaN(num) || num < 1) {
+      return null;
+    }
+    return num;
+  }
+  
+  return value;
 }
 
 async function loadVideoData(videoId) {
@@ -172,9 +189,12 @@ async function showVideoPage(videoId) {
   if (listPage) listPage.style.display = 'none';
   if (videoPage) videoPage.style.display = 'block';
   
+  showVideoLoading(true);
+  
   const videoData = await loadVideoData(videoId);
   
   if (!videoData) {
+    showVideoLoading(false);
     alert('视频不存在');
     showListPage();
     return;
@@ -186,13 +206,41 @@ async function showVideoPage(videoId) {
   if (titleEl) titleEl.textContent = videoData.title || `视频${videoId}`;
   if (descEl) descEl.textContent = videoData.description || '';
   
+  document.title = `${videoData.title || `视频${videoId}`} - 历史高光`;
+  
   initWaline(videoId);
   
   if (videoData.videoUrl && videoData.videoUrl.trim() !== '') {
     setupVideo(videoData.videoUrl);
+    showVideoLoading(false);
   } else {
+    showVideoLoading(false);
     alert('视频链接无效');
     showListPage();
+  }
+}
+
+function showVideoLoading(show) {
+  const playerWrapper = document.querySelector('.video-player-wrapper');
+  if (!playerWrapper) return;
+  
+  let loadingEl = playerWrapper.querySelector('.video-loading');
+  
+  if (show) {
+    if (!loadingEl) {
+      loadingEl = document.createElement('div');
+      loadingEl.className = 'video-loading';
+      loadingEl.innerHTML = `
+        <div class="loading-spinner-large"></div>
+        <div class="loading-text">视频加载中...</div>
+      `;
+      playerWrapper.appendChild(loadingEl);
+    }
+    loadingEl.style.display = 'flex';
+  } else {
+    if (loadingEl) {
+      loadingEl.style.display = 'none';
+    }
   }
 }
 
