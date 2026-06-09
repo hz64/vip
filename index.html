@@ -165,6 +165,33 @@
       font-size: 1em;
     }
 
+    .pagination {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      margin-top: 30px;
+      flex-wrap: wrap;
+    }
+
+    .pagination-btn {
+      background-color: #333;
+      color: white;
+      border: 1px solid #000;
+      padding: 8px 16px;
+      cursor: pointer;
+      font-size: 1em;
+      transition: background-color 0.3s ease;
+    }
+
+    .pagination-btn:hover {
+      background-color: #555;
+    }
+
+    .pagination-btn.active {
+      background-color: #666;
+      font-weight: bold;
+    }
+
     /* 响应式布局 */
     @media (max-width: 768px) {
       .highlights-grid {
@@ -204,6 +231,10 @@
     <div class="highlights-grid" id="highlights-container">
       <!-- 动态生成内容 -->
     </div>
+    
+    <div class="pagination" id="pagination">
+      <!-- 分页按钮将动态生成 -->
+    </div>
   </div>
 
   <div class="video-container" id="video-container" style="display: none;">
@@ -218,74 +249,130 @@
   </div>
 
   <script>
-    // 配置数据
-    const config = {
-      "title": "历史高光",
-      "highlights": [
-        {
-          "id": 1,
-          "title": "直播间kmj",
-          "description": "随机在ks同城直播间发语音kmj（きもちいい 真舒服）主播播放导致下播",
-          "coverImage": "https://i.ibb.co/bRqgZVnj/Screen-Shot-2026-03-09-180151-583.png",
-          "videoUrl": "https://cdn.videy.co/R0XxlRen1.mp4"
-        },
-         {
-          "id": 2,
-          "title": "西林爆炒网友",
-          "description": "西林莫名其妙被骂了，之后开始了他的反击......",
-          "coverImage": "https://i.ibb.co/V0DgbPJ0/2026-06-09-09-50-30.png",
-          "videoUrl": "https://cdn.videy.co/O4WqDEbG1.mp4"
-        },
-          {
-          "id": 3,
-          "title": "敬请期待",
-          "description": "敬请期待",
-          "coverImage": "",
-          "videoUrl": ""
-        },
-      ]
-    };
-
+    // 视频列表数据
+    let videos = [];
     // 当前播放器实例
     let currentPlayer = null;
+    // 当前页码
+    let currentPage = 1;
+    // 每页显示的视频数量
+    const videosPerPage = 5;
+
+    // 从URL获取参数
+    function getUrlParam(name) {
+      const urlParams = new URLSearchParams(window.location.search);
+      return urlParams.get(name);
+    }
+
+    // 加载单个视频的JSON数据
+    async function loadVideoData(videoId) {
+      try {
+        const response = await fetch(`data/${videoId}.json`);
+        if (!response.ok) {
+          throw new Error(`无法加载视频 ${videoId}`);
+        }
+        return await response.json();
+      } catch (error) {
+        console.error('加载视频数据失败:', error);
+        return null;
+      }
+    }
+
+    // 自动扫描data目录中的所有JSON文件
+    async function scanVideoFiles() {
+      // 假设JSON文件从1开始连续编号
+      const videoList = [];
+      let videoId = 1;
+      
+      while (true) {
+        const videoData = await loadVideoData(videoId);
+        if (videoData) {
+          videoList.push({
+            id: videoId,
+            title: videoData.title || `视频${videoId}`,
+            description: videoData.description || '',
+            coverImage: videoData.coverImage || '',
+            videoUrl: videoData.videoUrl || ''
+          });
+          videoId++;
+        } else {
+          break;
+        }
+      }
+      
+      return videoList;
+    }
+
+    // 更新URL参数
+    function updateUrlParam(videoId, page) {
+      const url = new URL(window.location.href);
+      if (videoId) {
+        url.searchParams.set('id', videoId);
+      } else {
+        url.searchParams.delete('id');
+      }
+      
+      if (page) {
+        url.searchParams.set('page', page);
+      } else {
+        url.searchParams.delete('page');
+      }
+      
+      window.history.pushState({ videoId, page }, '', url);
+    }
 
     // 页面加载完成后初始化
-    window.addEventListener('DOMContentLoaded', function() {
-      // 渲染页面内容
-      renderContent();
+    window.addEventListener('DOMContentLoaded', async function() {
+      // 扫描视频文件
+      videos = await scanVideoFiles();
+      
+      // 获取URL中的页码参数
+      const pageParam = parseInt(getUrlParam('page'));
+      if (pageParam && pageParam > 0) {
+        currentPage = pageParam;
+      }
+      
+      // 渲染视频列表
+      renderVideoList();
       
       // 绑定关闭按钮事件
       bindCloseEvents();
+      
+      // 检查URL中是否有id参数，如果有则自动播放对应视频
+      const videoId = parseInt(getUrlParam('id'));
+      if (videoId) {
+        await openVideoById(videoId);
+      }
     });
 
-    // 渲染页面内容
-    function renderContent() {
-      // 更新页面标题
-      const pageTitle = document.getElementById('page-title');
-      if (pageTitle) {
-        pageTitle.textContent = config.title;
-        document.title = config.title;
-      }
-      
-      // 渲染高光内容
+    // 渲染视频列表
+    function renderVideoList() {
       const container = document.getElementById('highlights-container');
       if (container) {
         container.innerHTML = '';
         
-        config.highlights.forEach(highlight => {
+        // 计算当前页的视频
+        const startIndex = (currentPage - 1) * videosPerPage;
+        const endIndex = startIndex + videosPerPage;
+        const currentVideos = videos.slice(startIndex, endIndex);
+        
+        if (currentVideos.length === 0) {
+          container.innerHTML = '<p style="text-align: center; color: #999;">暂无视频</p>';
+          return;
+        }
+        
+        currentVideos.forEach(video => {
           const card = document.createElement('div');
           card.className = 'highlight-card';
           
-          // 检查是否有封面图片
-          const hasCoverImage = highlight.coverImage && highlight.coverImage.trim() !== '';
+          const hasCoverImage = video.coverImage && video.coverImage.trim() !== '';
           const coverImageHTML = hasCoverImage ? 
-            `<img class="cover-image loading" src="${highlight.coverImage}" alt="${highlight.title}" data-video="${highlight.videoUrl}">` : 
+            `<img class="cover-image loading" src="${video.coverImage}" alt="${video.title}" data-id="${video.id}" data-video="${video.videoUrl}">` : 
             '<div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: #999;">暂无封面</div>';
           
-          // 检查是否有视频URL
-          const hasVideoUrl = highlight.videoUrl && highlight.videoUrl.trim() !== '';
+          const hasVideoUrl = video.videoUrl && video.videoUrl.trim() !== '';
           const playButtonHTML = hasVideoUrl ? 
-            `<button class="play-btn" data-video="${highlight.videoUrl}">播放视频</button>` : 
+            `<button class="play-btn" data-id="${video.id}">播放视频</button>` : 
             '<button class="play-btn" disabled style="background-color: #999; cursor: not-allowed;">敬请期待</button>';
           
           card.innerHTML = `
@@ -294,8 +381,8 @@
               ${coverImageHTML}
             </div>
             <div class="card-content">
-              <h3>${highlight.title}</h3>
-              <p>${highlight.description}</p>
+              <h3>${video.title}</h3>
+              <p>${video.description}</p>
               ${playButtonHTML}
             </div>
           `;
@@ -312,10 +399,68 @@
             }
           });
         });
-
+        
+        // 绲染分页导航
+        renderPagination();
+        
         // 绑定事件监听器
         bindVideoEvents();
       }
+    }
+    
+    // 渲染分页导航
+    function renderPagination() {
+      const pagination = document.getElementById('pagination');
+      if (pagination) {
+        pagination.innerHTML = '';
+        
+        const totalPages = Math.ceil(videos.length / videosPerPage);
+        
+        if (totalPages <= 1) {
+          return; // 只有一页时不显示分页
+        }
+        
+        // 上一页按钮
+        if (currentPage > 1) {
+          const prevBtn = document.createElement('button');
+          prevBtn.className = 'pagination-btn';
+          prevBtn.textContent = '上一页';
+          prevBtn.onclick = function() {
+            goToPage(currentPage - 1);
+          };
+          pagination.appendChild(prevBtn);
+        }
+        
+        // 页码按钮
+        for (let i = 1; i <= totalPages; i++) {
+          const pageBtn = document.createElement('button');
+          pageBtn.className = 'pagination-btn' + (i === currentPage ? ' active' : '');
+          pageBtn.textContent = i;
+          pageBtn.onclick = function() {
+            goToPage(i);
+          };
+          pagination.appendChild(pageBtn);
+        }
+        
+        // 下一页按钮
+        if (currentPage < totalPages) {
+          const nextBtn = document.createElement('button');
+          nextBtn.className = 'pagination-btn';
+          nextBtn.textContent = '下一页';
+          nextBtn.onclick = function() {
+            goToPage(currentPage + 1);
+          };
+          pagination.appendChild(nextBtn);
+        }
+      }
+    }
+    
+    // 跳转到指定页面
+    function goToPage(page) {
+      currentPage = page;
+      updateUrlParam(null, page);
+      renderVideoList();
+      window.scrollTo(0, 0);
     }
 
     // 绑定视频播放相关事件
@@ -323,24 +468,40 @@
       // 封面图片点击事件
       document.querySelectorAll('.cover-image').forEach(img => {
         img.addEventListener('click', function() {
-          const videoUrl = this.getAttribute('data-video');
-          if (videoUrl && videoUrl.trim() !== '') {
-            openVideo(videoUrl);
+          const videoId = this.getAttribute('data-id');
+          if (videoId) {
+            openVideoById(parseInt(videoId));
           }
         });
       });
 
       // 播放按钮点击事件
       document.querySelectorAll('.play-btn').forEach(btn => {
-        if (!btn.hasAttribute('disabled')) {
+        const videoId = btn.getAttribute('data-id');
+        if (videoId) {
           btn.addEventListener('click', function() {
-            const videoUrl = this.getAttribute('data-video');
-            if (videoUrl && videoUrl.trim() !== '') {
-              openVideo(videoUrl);
-            }
+            openVideoById(parseInt(videoId));
           });
         }
       });
+    }
+    
+    // 根据视频ID打开视频
+    async function openVideoById(videoId) {
+      // 更新URL参数
+      updateUrlParam(videoId);
+      
+      // 加载视频数据
+      const videoData = await loadVideoData(videoId);
+      
+      if (!videoData || !videoData.videoUrl || videoData.videoUrl.trim() === '') {
+        alert('视频链接无效，请稍后再试');
+        updateUrlParam(null);
+        return;
+      }
+      
+      // 打开视频
+      openVideo(videoData.videoUrl);
     }
 
     // 绑定关闭相关事件
@@ -445,6 +606,9 @@
           currentPlayer.dispose();
           currentPlayer = null;
         }
+        
+        // 更新URL参数，移除id
+        updateUrlParam(null);
         
         // 获取视频容器和包装器
         const videoContainer = document.getElementById('video-container');
