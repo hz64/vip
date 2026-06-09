@@ -4,6 +4,8 @@ let currentPage = 1;
 const videosPerPage = 5;
 const videoDataCache = new Map();
 let walineInstance = null;
+let isNavigating = false;
+let toastTimeout = null;
 
 function getUrlParam(name) {
   const urlParams = new URLSearchParams(window.location.search);
@@ -26,6 +28,32 @@ function getUrlParam(name) {
   }
   
   return value;
+}
+
+function showToast(message, duration = 3000) {
+  let toast = document.querySelector('.toast-message');
+  
+  if (toastTimeout) {
+    clearTimeout(toastTimeout);
+  }
+  
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.className = 'toast-message';
+    document.body.appendChild(toast);
+  }
+  
+  toast.textContent = message;
+  toast.style.display = 'block';
+  toast.style.opacity = '1';
+  
+  toastTimeout = setTimeout(() => {
+    toast.style.opacity = '0';
+    toast.style.transition = 'opacity 0.3s ease';
+    setTimeout(() => {
+      toast.style.display = 'none';
+    }, 300);
+  }, duration);
 }
 
 async function loadVideoData(videoId) {
@@ -57,28 +85,30 @@ function initWaline(videoId) {
     walineInstance = null;
   }
   
-  walineInstance = Waline.init({
-    el: '#waline-container',
-    serverURL: 'https://pl-iota-three.vercel.app/',
-    path: `video-${videoId}`,
-    lang: 'zh-CN',
-    dark: 'auto',
-    comment: true,
-    requiredMeta: ['nick', 'mail'],
-    visitor: true,
-    pageSize: 10,
-    placeholder: '说点什么吧...',
-    uploadImage: false,
-    emoji: [
-      'https://unpkg.com/@waline/emojis@1.1.0/weibo',
-      'https://unpkg.com/@waline/emojis@1.1.0/bilibili',
-    ],
-    requiredFields: ['nick', 'mail'],
-    wordLimit: '[0, 200]',
-    preview: { isMobile: false },
-    meta: ['nick', 'mail', 'link'],
-    copyright: true,
-  });
+  setTimeout(() => {
+    walineInstance = Waline.init({
+      el: '#waline-container',
+      serverURL: 'https://pl-iota-three.vercel.app/',
+      path: `video-${videoId}`,
+      lang: 'zh-CN',
+      dark: 'auto',
+      comment: true,
+      requiredMeta: ['nick', 'mail'],
+      visitor: true,
+      pageSize: 10,
+      placeholder: '说点什么吧...',
+      uploadImage: false,
+      emoji: [
+        'https://unpkg.com/@waline/emojis@1.1.0/weibo',
+        'https://unpkg.com/@waline/emojis@1.1.0/bilibili',
+      ],
+      requiredFields: ['nick', 'mail'],
+      wordLimit: '[0, 200]',
+      preview: { isMobile: false },
+      meta: ['nick', 'mail', 'link'],
+      copyright: true,
+    });
+  }, 300);
 }
 
 async function scanVideoFiles() {
@@ -127,62 +157,85 @@ async function scanVideoFiles() {
   return videoList;
 }
 
-function updateUrlParam(videoId, page) {
+function navigateTo(page, pageNum = null) {
+  if (isNavigating) return;
+  isNavigating = true;
+  
   const url = new URL(window.location.href);
-  if (videoId) {
-    url.searchParams.set('id', videoId);
-  } else {
+  
+  if (page === 'video') {
+    url.searchParams.set('id', pageNum);
+  } else if (page === 'list') {
     url.searchParams.delete('id');
+    if (pageNum && pageNum > 1) {
+      url.searchParams.set('page', pageNum);
+    } else {
+      url.searchParams.delete('page');
+    }
   }
   
-  if (page) {
-    url.searchParams.set('page', page);
-  } else {
-    url.searchParams.delete('page');
-  }
+  window.history.pushState({ page, videoId: pageNum, listPage: currentPage }, '', url);
   
-  window.history.pushState({ videoId, page }, '', url);
+  setTimeout(() => {
+    isNavigating = false;
+  }, 100);
 }
+
+window.addEventListener('popstate', function(event) {
+  if (event.state) {
+    if (event.state.page === 'video' && event.state.videoId) {
+      showVideoPage(event.state.videoId);
+    } else {
+      currentPage = event.state.listPage || 1;
+      showListPage();
+    }
+  } else {
+    currentPage = 1;
+    showListPage();
+  }
+});
 
 window.addEventListener('DOMContentLoaded', async function() {
   videos = await scanVideoFiles();
   
-  const videoId = parseInt(getUrlParam('id'));
+  const videoId = getUrlParam('id');
+  const pageParam = getUrlParam('page');
+  
+  if (pageParam) {
+    currentPage = pageParam;
+  }
   
   if (videoId) {
     await showVideoPage(videoId);
   } else {
     showListPage();
-    
-    const pageParam = parseInt(getUrlParam('page'));
-    if (pageParam && pageParam > 0) {
-      currentPage = pageParam;
-    }
-    
-    renderVideoList();
   }
   
   bindCloseEvents();
 });
 
-function showListPage() {
+function showListPage(restoreScroll = true) {
   const listPage = document.getElementById('list-page');
   const videoPage = document.getElementById('video-page');
   
   if (listPage) listPage.style.display = 'block';
   if (videoPage) videoPage.style.display = 'none';
   
-  const url = new URL(window.location.href);
-  url.searchParams.delete('id');
-  window.history.replaceState({}, '', url);
-  
   if (currentPlayer) {
     currentPlayer.pause();
-    currentPlayer = null;
   }
+  
+  if (restoreScroll && window.scrollY > 0) {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+  
+  document.title = '历史高光';
 }
 
 async function showVideoPage(videoId) {
+  if (isNavigating) return;
+  isNavigating = true;
+  
   const listPage = document.getElementById('list-page');
   const videoPage = document.getElementById('video-page');
   
@@ -195,8 +248,12 @@ async function showVideoPage(videoId) {
   
   if (!videoData) {
     showVideoLoading(false);
-    alert('视频不存在');
-    showListPage();
+    showToast('视频不存在');
+    navigateTo('list', currentPage);
+    setTimeout(() => {
+      showListPage(false);
+    }, 100);
+    isNavigating = false;
     return;
   }
   
@@ -215,9 +272,14 @@ async function showVideoPage(videoId) {
     showVideoLoading(false);
   } else {
     showVideoLoading(false);
-    alert('视频链接无效');
-    showListPage();
+    showToast('视频链接无效');
+    navigateTo('list', currentPage);
+    setTimeout(() => {
+      showListPage(false);
+    }, 100);
   }
+  
+  isNavigating = false;
 }
 
 function showVideoLoading(show) {
@@ -375,9 +437,9 @@ function renderPagination() {
 
 function goToPage(page) {
   currentPage = page;
-  updateUrlParam(null, page);
+  navigateTo('list', page);
   renderVideoList();
-  window.scrollTo(0, 0);
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 function bindVideoEvents() {
@@ -385,7 +447,8 @@ function bindVideoEvents() {
     container.addEventListener('click', function() {
       const videoId = this.getAttribute('data-id');
       if (videoId) {
-        window.location.href = `?id=${videoId}`;
+        navigateTo('video', parseInt(videoId));
+        showVideoPage(parseInt(videoId));
       }
     });
   });
@@ -395,7 +458,8 @@ function bindVideoEvents() {
     if (videoId) {
       btn.addEventListener('click', function(e) {
         e.stopPropagation();
-        window.location.href = `?id=${videoId}`;
+        navigateTo('video', parseInt(videoId));
+        showVideoPage(parseInt(videoId));
       });
     }
   });
@@ -405,7 +469,8 @@ function bindCloseEvents() {
   const backBtn = document.getElementById('back-btn');
   if (backBtn) {
     backBtn.addEventListener('click', function() {
-      showListPage();
+      navigateTo('list', currentPage);
+      showListPage(true);
     });
   }
 }
@@ -413,13 +478,14 @@ function bindCloseEvents() {
 function setupVideo(videoUrl) {
   try {
     if (!videoUrl || videoUrl.trim() === '') {
-      alert('视频链接无效，请稍后再试');
+      showToast('视频链接无效，请稍后再试');
       return;
     }
     
     const videoPlayer = document.getElementById('video-player');
     if (!videoPlayer) {
       console.error('视频播放器不存在');
+      showToast('播放器初始化失败');
       return;
     }
     
@@ -435,9 +501,17 @@ function setupVideo(videoUrl) {
       responsive: true
     });
     
+    currentPlayer.on('waiting', function() {
+      showVideoLoading(true);
+    });
+    
+    currentPlayer.on('canplay', function() {
+      showVideoLoading(false);
+    });
+    
     currentPlayer.on('error', function() {
-      console.error('视频加载失败');
-      alert('视频加载失败，请稍后再试');
+      showVideoLoading(false);
+      showToast('视频加载失败，请稍后再试');
     });
     
     currentPlayer.src({
@@ -447,6 +521,6 @@ function setupVideo(videoUrl) {
     
   } catch (error) {
     console.error('设置视频失败:', error);
-    alert('视频设置失败，请稍后再试');
+    showToast('视频设置失败，请稍后再试');
   }
 }
