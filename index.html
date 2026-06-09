@@ -29,10 +29,11 @@
       <button class="back-btn" id="back-btn">← 返回列表</button>
       <div class="video-card">
         <div class="video-player-wrapper">
-          <div id="video-loading" class="video-loading">
+          <div class="video-loading-overlay" id="video-loading">
             <div class="loading-spinner-large"></div>
+            <div class="loading-text">视频加载中...</div>
           </div>
-          <video id="video-player" class="video-js vjs-default-skin vjs-big-play-centered">
+          <video id="video-player" class="video-js vjs-default-skin vjs-big-play-centered" style="display: none;">
             <p class="vjs-no-js">要观看此视频，请启用JavaScript</p>
           </video>
         </div>

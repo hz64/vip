@@ -1,223 +1,234 @@
-const App = {
-  videos: [],
-  currentPlayer: null,
-  currentPage: 1,
-  videosPerPage: 5,
-  videoDataCache: new Map(),
-  walineInstance: null,
+let videos = [];
+let currentPlayer = null;
+let currentPage = 1;
+const videosPerPage = 5;
+const videoDataCache = new Map();
+const maxVideoId = 50;
+let walineInstance = null;
+
+function getUrlParam(name) {
+  const urlParams = new URLSearchParams(window.location.search);
+  const value = urlParams.get(name);
   
-  init() {
-    window.addEventListener('DOMContentLoaded', () => this.handleDOMContentLoaded());
-    window.addEventListener('popstate', (e) => this.handlePopState(e));
-  },
-  
-  handleDOMContentLoaded() {
-    this.scanVideoFiles().then(() => {
-      const videoId = this.getValidVideoId();
-      if (videoId) {
-        this.showVideoPage(videoId);
-      } else {
-        this.currentPage = this.getValidPage();
-        this.showListPage();
-        this.renderVideoList();
-      }
-      this.bindCloseEvents();
-    });
-  },
-  
-  handlePopState(e) {
-    if (e.state && e.state.videoId) {
-      this.showVideoPage(e.state.videoId);
-    } else {
-      this.showListPage();
-      this.currentPage = e.state?.page || 1;
-      this.renderVideoList();
-    }
-  },
-  
-  getUrlParam(name) {
-    const urlParams = new URLSearchParams(window.location.search);
-    return urlParams.get(name);
-  },
-  
-  getValidVideoId() {
-    const param = this.getUrlParam('id');
-    if (!param) return null;
-    
-    const videoId = parseInt(param, 10);
-    return videoId > 0 && videoId <= 100 ? videoId : null;
-  },
-  
-  getValidPage() {
-    const param = this.getUrlParam('page');
-    if (!param) return 1;
-    
-    const page = parseInt(param, 10);
-    return page > 0 ? page : 1;
-  },
-  
-  async loadVideoData(videoId) {
-    if (this.videoDataCache.has(videoId)) {
-      return this.videoDataCache.get(videoId);
-    }
-    
-    try {
-      const response = await fetch(`data/${videoId}.json`);
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-      const data = await response.json();
-      this.videoDataCache.set(videoId, data);
-      return data;
-    } catch (error) {
-      console.error(`加载视频${videoId}失败:`, error);
-      this.videoDataCache.set(videoId, null);
+  if (name === 'id') {
+    const num = parseInt(value, 10);
+    if (isNaN(num) || num < 1 || num > maxVideoId) {
       return null;
     }
-  },
+    return num;
+  }
   
-  initWaline(videoId) {
-    const container = document.getElementById('waline-container');
-    if (!container) return;
+  if (name === 'page') {
+    const num = parseInt(value, 10);
+    if (isNaN(num) || num < 1) {
+      return 1;
+    }
+    return num;
+  }
+  
+  return value;
+}
+
+function updatePageTitle(title) {
+  document.title = title ? `${title} - 历史高光` : '历史高光';
+}
+
+async function loadVideoData(videoId) {
+  if (videoDataCache.has(videoId)) {
+    return videoDataCache.get(videoId);
+  }
+  
+  try {
+    const response = await fetch(`data/${videoId}.json`);
+    if (!response.ok) {
+      throw new Error(`无法加载视频 ${videoId}`);
+    }
+    const data = await response.json();
+    videoDataCache.set(videoId, data);
+    return data;
+  } catch (error) {
+    console.error('加载视频数据失败:', error);
+    videoDataCache.set(videoId, null);
+    return null;
+  }
+}
+
+function initWaline(videoId) {
+  const container = document.getElementById('waline-container');
+  if (!container) return;
+  
+  if (walineInstance) {
+    walineInstance.destroy();
+    walineInstance = null;
+  }
+  
+  walineInstance = Waline.init({
+    el: '#waline-container',
+    serverURL: 'https://pl-iota-three.vercel.app/',
+    path: `video-${videoId}`,
+    lang: 'zh-CN',
+    dark: 'auto',
+    comment: true,
+    requiredMeta: ['nick', 'mail'],
+    visitor: true,
+    pageSize: 10,
+    placeholder: '说点什么吧...',
+    uploadImage: false,
+    emoji: [
+      'https://unpkg.com/@waline/emojis@1.1.0/weibo',
+      'https://unpkg.com/@waline/emojis@1.1.0/bilibili',
+    ],
+    requiredFields: ['nick', 'mail'],
+    wordLimit: '[0, 200]',
+    preview: { isMobile: false },
+    meta: ['nick', 'mail', 'link'],
+    copyright: true,
+  });
+}
+
+async function scanVideoFiles() {
+  const videoList = [];
+  
+  try {
+    const response = await fetch('data/index.json');
+    if (!response.ok) {
+      throw new Error('无法加载索引文件');
+    }
+    const indexData = await response.json();
+    const videoIds = indexData.videos || [];
     
-    if (this.walineInstance) {
-      this.walineInstance.destroy();
-      this.walineInstance = null;
+    if (videoIds.length === 0) {
+      console.log('索引文件为空');
+      return videoList;
     }
     
-    this.walineInstance = Waline.init({
-      el: '#waline-container',
-      serverURL: 'https://pl-iota-three.vercel.app/',
-      path: `video-${videoId}`,
-      lang: 'zh-CN',
-      dark: 'auto',
-      comment: true,
-      requiredMeta: ['nick', 'mail'],
-      visitor: true,
-      pageSize: 10,
-      placeholder: '说点什么吧...',
-      uploadImage: false,
-      emoji: [
-        'https://unpkg.com/@waline/emojis@1.1.0/weibo',
-        'https://unpkg.com/@waline/emojis@1.1.0/bilibili',
-      ],
-      requiredFields: ['nick', 'mail'],
-      wordLimit: '[0, 200]',
-      preview: { isMobile: false },
-      meta: ['nick', 'mail', 'link'],
-      copyright: true,
+    const loadPromises = videoIds.map(videoId => {
+      return loadVideoData(videoId).then(data => {
+        if (data) {
+          return {
+            id: videoId,
+            title: data.title || `视频${videoId}`,
+            description: data.description || '',
+            coverImage: data.coverImage || '',
+            videoUrl: data.videoUrl || ''
+          };
+        }
+        return null;
+      });
     });
-  },
-  
-  async scanVideoFiles() {
-    try {
-      const response = await fetch('data/index.json');
-      if (!response.ok) throw new Error('无法加载索引');
-      
-      const indexData = await response.json();
-      const videoIds = indexData.videos || [];
-      
-      if (videoIds.length === 0) {
-        console.log('索引文件为空');
-        return;
+    
+    const results = await Promise.all(loadPromises);
+    results.forEach(result => {
+      if (result) {
+        videoList.push(result);
       }
-      
-      const loadPromises = videoIds.map(id => 
-        this.loadVideoData(id).then(data => data ? ({
-          id,
-          title: data.title || `视频${id}`,
-          description: data.description || '',
-          coverImage: data.coverImage || '',
-          videoUrl: data.videoUrl || ''
-        }) : null)
-      );
-      
-      const results = await Promise.all(loadPromises);
-      this.videos = results.filter(Boolean);
-      
-    } catch (error) {
-      console.error('加载视频列表失败:', error);
-    }
-  },
-  
-  updateUrlParam(videoId, page) {
-    const url = new URL(window.location.href);
-    videoId ? url.searchParams.set('id', videoId) : url.searchParams.delete('id');
-    page ? url.searchParams.set('page', page) : url.searchParams.delete('page');
-    window.history.pushState({ videoId, page }, '', url);
-  },
-  
-  showListPage() {
-    this.hideVideoLoading();
+    });
     
-    document.getElementById('list-page')?.style.setProperty('display', 'block');
-    document.getElementById('video-page')?.style.setProperty('display', 'none');
-    
-    const url = new URL(window.location.href);
+  } catch (error) {
+    console.error('加载索引文件失败:', error);
+    return videoList;
+  }
+  
+  return videoList;
+}
+
+function updateUrlParam(videoId, page) {
+  const url = new URL(window.location.href);
+  if (videoId) {
+    url.searchParams.set('id', videoId);
+  } else {
     url.searchParams.delete('id');
-    window.history.replaceState({}, '', url);
-    
-    this.destroyPlayer();
-    document.title = '历史高光';
-  },
+  }
   
-  async showVideoPage(videoId) {
-    document.getElementById('list-page')?.style.setProperty('display', 'none');
-    document.getElementById('video-page')?.style.setProperty('display', 'block');
+  if (page) {
+    url.searchParams.set('page', page);
+  } else {
+    url.searchParams.delete('page');
+  }
+  
+  window.history.pushState({ videoId, page }, '', url);
+}
+
+window.addEventListener('DOMContentLoaded', async function() {
+  videos = await scanVideoFiles();
+  
+  const videoId = parseInt(getUrlParam('id'));
+  
+  if (videoId) {
+    await showVideoPage(videoId);
+  } else {
+    showListPage();
     
-    this.showVideoLoading();
-    
-    try {
-      const videoData = await this.loadVideoData(videoId);
-      
-      if (!videoData) {
-        this.showError('视频不存在');
-        return;
-      }
-      
-      document.getElementById('video-title')?.textContent = videoData.title || `视频${videoId}`;
-      document.getElementById('video-description')?.textContent = videoData.description || '';
-      
-      document.title = `${videoData.title || '视频'} - 历史高光`;
-      
-      this.initWaline(videoId);
-      
-      if (videoData.videoUrl?.trim()) {
-        this.setupVideo(videoData.videoUrl);
-      } else {
-        throw new Error('视频链接无效');
-      }
-      
-    } catch (error) {
-      console.error('显示视频页面失败:', error);
-      this.showError(error.message);
+    const pageParam = parseInt(getUrlParam('page'));
+    if (pageParam && pageParam > 0) {
+      currentPage = pageParam;
     }
-  },
-  
-  showVideoLoading() {
-    const loadingEl = document.getElementById('video-loading');
-    const playerWrapper = document.getElementById('video-player-wrapper');
-    if (loadingEl) loadingEl.style.display = 'flex';
-    if (playerWrapper) playerWrapper.style.opacity = '0.5';
-  },
-  
-  hideVideoLoading() {
-    const loadingEl = document.getElementById('video-loading');
-    const playerWrapper = document.getElementById('video-player-wrapper');
-    if (loadingEl) loadingEl.style.display = 'none';
-    if (playerWrapper) playerWrapper.style.opacity = '1';
-  },
-  
-  showError(message) {
-    alert(message);
-    this.hideVideoLoading();
-    this.showListPage();
-  },
-  
-  renderVideoList() {
-    const container = document.getElementById('highlights-container');
-    if (!container) return;
     
+    renderVideoList();
+  }
+  
+  bindCloseEvents();
+});
+
+function showListPage() {
+  const listPage = document.getElementById('list-page');
+  const videoPage = document.getElementById('video-page');
+  
+  if (listPage) listPage.style.display = 'block';
+  if (videoPage) videoPage.style.display = 'none';
+  
+  updatePageTitle(null);
+  
+  const url = new URL(window.location.href);
+  url.searchParams.delete('id');
+  window.history.replaceState({}, '', url);
+  
+  if (currentPlayer) {
+    currentPlayer.pause();
+    currentPlayer = null;
+  }
+}
+
+async function showVideoPage(videoId) {
+  const listPage = document.getElementById('list-page');
+  const videoPage = document.getElementById('video-page');
+  const videoLoading = document.getElementById('video-loading');
+  const videoPlayer = document.getElementById('video-player');
+  
+  if (listPage) listPage.style.display = 'none';
+  if (videoPage) videoPage.style.display = 'block';
+  if (videoLoading) videoLoading.style.display = 'flex';
+  if (videoPlayer) videoPlayer.style.display = 'none';
+  
+  const videoData = await loadVideoData(videoId);
+  
+  if (!videoData) {
+    alert('视频不存在');
+    showListPage();
+    return;
+  }
+  
+  const titleEl = document.getElementById('video-title');
+  const descEl = document.getElementById('video-description');
+  
+  if (titleEl) titleEl.textContent = videoData.title || `视频${videoId}`;
+  if (descEl) descEl.textContent = videoData.description || '';
+  
+  updatePageTitle(videoData.title || `视频${videoId}`);
+  
+  initWaline(videoId);
+  
+  if (videoData.videoUrl && videoData.videoUrl.trim() !== '') {
+    setupVideo(videoData.videoUrl);
+  } else {
+    alert('视频链接无效');
+    showListPage();
+  }
+}
+
+function renderVideoList() {
+  const container = document.getElementById('highlights-container');
+  if (container) {
     container.innerHTML = `
       <div class="loading-container">
         <div class="loading-spinner-large"></div>
@@ -228,187 +239,211 @@ const App = {
     setTimeout(() => {
       container.innerHTML = '';
       
-      const totalPages = Math.ceil(this.videos.length / this.videosPerPage);
-      if (this.currentPage > totalPages && totalPages > 0) {
-        this.currentPage = totalPages;
-      }
-      
-      const startIndex = (this.currentPage - 1) * this.videosPerPage;
-      const currentVideos = this.videos.slice(startIndex, startIndex + this.videosPerPage);
+      const startIndex = (currentPage - 1) * videosPerPage;
+      const endIndex = startIndex + videosPerPage;
+      const currentVideos = videos.slice(startIndex, endIndex);
       
       if (currentVideos.length === 0) {
-        container.innerHTML = '<p style="text-align: center; color: #999; padding: 40px;">暂无视频</p>';
+        container.innerHTML = '<p style="text-align: center; color: #999;">暂无视频</p>';
         return;
       }
       
-      currentVideos.forEach((video, index) => {
+      currentVideos.forEach(video => {
         const card = document.createElement('div');
         card.className = 'highlight-card';
-        card.style.animationDelay = `${0.1 + index * 0.05}s`;
         
-        const hasCover = video.coverImage?.trim();
-        const hasVideoUrl = video.videoUrl?.trim();
+        const hasCoverImage = video.coverImage && video.coverImage.trim() !== '';
+        const coverImageHTML = hasCoverImage ? 
+          `<img class="cover-image loading" src="" data-src="${video.coverImage}" alt="${video.title}" loading="lazy">` : 
+          '<div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: #999;">暂无封面</div>';
+        
+        const hasVideoUrl = video.videoUrl && video.videoUrl.trim() !== '';
+        const playButtonHTML = hasVideoUrl ? 
+          `<button class="play-btn" data-id="${video.id}">播放视频</button>` : 
+          '<button class="play-btn" disabled style="background-color: #999; cursor: not-allowed;">敬请期待</button>';
         
         card.innerHTML = `
           <div class="image-container" data-id="${video.id}">
-            ${hasCover ? '<div class="loading-spinner"></div>' : ''}
-            ${hasCover 
-              ? `<img class="cover-image loading" src="" data-src="${video.coverImage}" alt="${video.title}" loading="lazy">` 
-              : '<div class="no-cover">暂无封面</div>'
-            }
+            ${hasCoverImage ? '<div class="loading-spinner"></div>' : ''}
+            ${coverImageHTML}
           </div>
           <div class="card-content">
             <h3>${video.title}</h3>
             <p>${video.description}</p>
-            <button class="play-btn" ${hasVideoUrl ? `data-id="${video.id}"` : 'disabled'}>
-              ${hasVideoUrl ? '播放视频' : '敬请期待'}
-            </button>
+            ${playButtonHTML}
           </div>
         `;
         container.appendChild(card);
       });
-      
-      this.lazyLoadImages();
-      this.renderPagination();
-      this.bindVideoEvents();
+
+      lazyLoadImages();
+      renderPagination();
+      bindVideoEvents();
     }, 100);
-  },
+  }
+}
+
+function lazyLoadImages() {
+  const images = document.querySelectorAll('.cover-image[data-src]');
   
-  lazyLoadImages() {
-    const images = document.querySelectorAll('.cover-image[data-src]');
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach(entry => {
-        if (entry.isIntersecting) {
-          const img = entry.target;
-          const src = img.getAttribute('data-src');
+  const imageObserver = new IntersectionObserver((entries, observer) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        const img = entry.target;
+        const src = img.getAttribute('data-src');
+        
+        if (src) {
+          img.src = src;
+          img.addEventListener('load', function() {
+            this.classList.remove('loading');
+            const spinner = this.parentElement.querySelector('.loading-spinner');
+            if (spinner) spinner.style.display = 'none';
+          });
           
-          if (src) {
-            img.src = src;
-            img.addEventListener('load', () => {
-              img.classList.remove('loading');
-              img.parentElement.querySelector('.loading-spinner')?.remove();
-            });
-            img.addEventListener('error', () => {
-              img.remove();
-              const noCover = document.createElement('div');
-              noCover.className = 'no-cover';
-              noCover.textContent = '暂无封面';
-              img.parentElement.appendChild(noCover);
-              img.parentElement.querySelector('.loading-spinner')?.remove();
-            });
-          }
-          observer.unobserve(img);
+          img.addEventListener('error', function() {
+            this.style.display = 'none';
+            const container = this.parentElement;
+            const noCoverDiv = document.createElement('div');
+            noCoverDiv.style.cssText = 'width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: #999;';
+            noCoverDiv.textContent = '暂无封面';
+            container.appendChild(noCoverDiv);
+            const spinner = container.querySelector('.loading-spinner');
+            if (spinner) spinner.style.display = 'none';
+          });
         }
-      });
-    }, { rootMargin: '50px', threshold: 0.1 });
-    
-    images.forEach(img => observer.observe(img));
-  },
+        
+        observer.unobserve(img);
+      }
+    });
+  }, { rootMargin: '50px 0px', threshold: 0.1 });
   
-  renderPagination() {
-    const pagination = document.getElementById('pagination');
-    if (!pagination) return;
-    
+  images.forEach(img => imageObserver.observe(img));
+}
+
+function renderPagination() {
+  const pagination = document.getElementById('pagination');
+  if (pagination) {
     pagination.innerHTML = '';
-    const totalPages = Math.ceil(this.videos.length / this.videosPerPage);
+    
+    const totalPages = Math.ceil(videos.length / videosPerPage);
     
     if (totalPages <= 1) return;
     
-    if (this.currentPage > 1) {
-      const prevBtn = this.createPaginationBtn('上一页', () => this.goToPage(this.currentPage - 1));
+    if (currentPage > 1) {
+      const prevBtn = document.createElement('button');
+      prevBtn.className = 'pagination-btn';
+      prevBtn.textContent = '上一页';
+      prevBtn.onclick = function() { goToPage(currentPage - 1); };
       pagination.appendChild(prevBtn);
     }
     
     for (let i = 1; i <= totalPages; i++) {
-      const pageBtn = this.createPaginationBtn(i, () => this.goToPage(i), i === this.currentPage);
+      const pageBtn = document.createElement('button');
+      pageBtn.className = 'pagination-btn' + (i === currentPage ? ' active' : '');
+      pageBtn.textContent = i;
+      pageBtn.onclick = function() { goToPage(i); };
       pagination.appendChild(pageBtn);
     }
     
-    if (this.currentPage < totalPages) {
-      const nextBtn = this.createPaginationBtn('下一页', () => this.goToPage(this.currentPage + 1));
+    if (currentPage < totalPages) {
+      const nextBtn = document.createElement('button');
+      nextBtn.className = 'pagination-btn';
+      nextBtn.textContent = '下一页';
+      nextBtn.onclick = function() { goToPage(currentPage + 1); };
       pagination.appendChild(nextBtn);
     }
-  },
-  
-  createPaginationBtn(text, onClick, isActive = false) {
-    const btn = document.createElement('button');
-    btn.className = `pagination-btn${isActive ? ' active' : ''}`;
-    btn.textContent = text;
-    btn.addEventListener('click', onClick);
-    return btn;
-  },
-  
-  goToPage(page) {
-    this.currentPage = Math.max(1, Math.min(page, Math.ceil(this.videos.length / this.videosPerPage)));
-    this.updateUrlParam(null, this.currentPage);
-    this.renderVideoList();
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  },
-  
-  bindVideoEvents() {
-    document.querySelectorAll('.image-container, .play-btn[data-id]').forEach(el => {
-      el.addEventListener('click', (e) => {
-        if (e.target.classList.contains('play-btn')) e.stopPropagation();
-        const videoId = e.currentTarget.getAttribute('data-id') || e.target.getAttribute('data-id');
-        if (videoId) {
-          window.location.href = `?id=${videoId}`;
-        }
-      });
-    });
-  },
-  
-  bindCloseEvents() {
-    document.getElementById('back-btn')?.addEventListener('click', () => {
-      this.showListPage();
-    });
-  },
-  
-  setupVideo(videoUrl) {
-    try {
-      if (!videoUrl?.trim()) throw new Error('视频链接无效');
-      
-      const videoPlayer = document.getElementById('video-player');
-      if (!videoPlayer) throw new Error('视频播放器不存在');
-      
-      this.destroyPlayer();
-      
-      this.currentPlayer = videojs('video-player', {
-        controls: true,
-        autoplay: false,
-        preload: 'none',
-        fluid: true,
-        responsive: true,
-        aspectRatio: 'auto'
-      });
-      
-      this.currentPlayer.on('error', () => {
-        console.error('视频加载失败');
-        this.showError('视频加载失败');
-      });
-      
-      this.currentPlayer.on('loadedmetadata', () => {
-        this.hideVideoLoading();
-      });
-      
-      this.currentPlayer.src({ src: videoUrl, type: 'video/mp4' });
-      
-    } catch (error) {
-      console.error('设置视频失败:', error);
-      this.hideVideoLoading();
-      this.showError(error.message);
-    }
-  },
-  
-  destroyPlayer() {
-    if (this.currentPlayer) {
-      try {
-        this.currentPlayer.dispose();
-      } catch (e) {
-        console.warn('销毁播放器失败:', e);
-      }
-      this.currentPlayer = null;
-    }
   }
-};
+}
 
-App.init();
+function goToPage(page) {
+  currentPage = page;
+  updateUrlParam(null, page);
+  renderVideoList();
+  window.scrollTo(0, 0);
+}
+
+function bindVideoEvents() {
+  document.querySelectorAll('.image-container').forEach(container => {
+    container.addEventListener('click', function() {
+      const videoId = this.getAttribute('data-id');
+      if (videoId) {
+        window.location.href = `?id=${videoId}`;
+      }
+    });
+  });
+
+  document.querySelectorAll('.play-btn').forEach(btn => {
+    const videoId = btn.getAttribute('data-id');
+    if (videoId) {
+      btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        window.location.href = `?id=${videoId}`;
+      });
+    }
+  });
+}
+
+function bindCloseEvents() {
+  const backBtn = document.getElementById('back-btn');
+  if (backBtn) {
+    backBtn.addEventListener('click', function() {
+      showListPage();
+    });
+  }
+}
+
+function setupVideo(videoUrl) {
+  try {
+    if (!videoUrl || videoUrl.trim() === '') {
+      alert('视频链接无效，请稍后再试');
+      hideVideoLoading();
+      return;
+    }
+    
+    const videoPlayer = document.getElementById('video-player');
+    if (!videoPlayer) {
+      console.error('视频播放器不存在');
+      hideVideoLoading();
+      return;
+    }
+    
+    if (currentPlayer) {
+      currentPlayer.dispose();
+    }
+    
+    currentPlayer = videojs('video-player', {
+      controls: true,
+      autoplay: false,
+      preload: 'none',
+      fluid: true,
+      responsive: true
+    });
+    
+    currentPlayer.on('error', function() {
+      console.error('视频加载失败');
+      alert('视频加载失败，请稍后再试');
+      hideVideoLoading();
+    });
+    
+    currentPlayer.on('loadeddata', function() {
+      hideVideoLoading();
+    });
+    
+    currentPlayer.src({
+      src: videoUrl,
+      type: 'video/mp4'
+    });
+    
+  } catch (error) {
+    console.error('设置视频失败:', error);
+    alert('视频设置失败，请稍后再试');
+    hideVideoLoading();
+  }
+}
+
+function hideVideoLoading() {
+  const videoLoading = document.getElementById('video-loading');
+  const videoPlayer = document.getElementById('video-player');
+  if (videoLoading) videoLoading.style.display = 'none';
+  if (videoPlayer) videoPlayer.style.display = 'block';
+}
