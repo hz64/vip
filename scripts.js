@@ -5,6 +5,7 @@ const videosPerPage = 5;
 const videoDataCache = new Map();
 let walineInstance = null;
 let toastTimeout = null;
+let videojsPlayer = null;
 
 document.addEventListener('contextmenu', function(e) {
   if (e.target.tagName === 'VIDEO') {
@@ -227,6 +228,16 @@ function showListPage(restoreScroll = true) {
   
   if (listPage) listPage.style.display = 'block';
   if (videoPage) videoPage.style.display = 'none';
+  
+  if (videojsPlayer) {
+    try {
+      videojsPlayer.pause();
+      videojsPlayer.dispose();
+      videojsPlayer = null;
+    } catch (e) {
+      console.warn('销毁播放器失败:', e);
+    }
+  }
   
   if (currentPlayer) {
     currentPlayer.pause();
@@ -487,113 +498,150 @@ function setupVideo(videoUrl) {
       return;
     }
     
-    let videoPlayer = document.getElementById('video-player');
-    if (!videoPlayer) {
-      console.error('视频播放器不存在');
+    if (typeof videojs === 'undefined') {
+      console.error('Video.js 未加载');
+      showToast('播放器初始化失败');
+      fallbackToNativePlayer(videoUrl);
+      return;
+    }
+    
+    if (videojsPlayer) {
+      try {
+        videojsPlayer.pause();
+        videojsPlayer.dispose();
+        videojsPlayer = null;
+      } catch (e) {
+        console.warn('销毁旧播放器失败:', e);
+      }
+    }
+    
+    const videoElement = document.getElementById('video-player');
+    if (!videoElement) {
+      console.error('视频元素不存在');
       showToast('播放器初始化失败');
       return;
     }
     
-    if (currentPlayer && currentPlayer !== videoPlayer) {
-      try {
-        currentPlayer.pause();
-        currentPlayer.src = '';
-        currentPlayer.load();
-      } catch (e) {
-        console.warn('清理旧播放器失败:', e);
-      }
-    }
+    showVideoLoading(true);
     
-    currentPlayer = videoPlayer;
-    
-    currentPlayer.pause();
-    
-    const handleError = (e) => {
-      console.error('视频错误事件:', e);
-      console.error('错误代码:', currentPlayer.error ? currentPlayer.error.code : '未知');
-      showVideoLoading(false);
+    videojsPlayer = videojs(videoElement, {
+      controls: true,
+      preload: 'metadata',
+      playsinline: true,
+      fluid: true,
+      aspectRatio: '16:9',
+      controlBar: {
+        volumePanel: { inline: false },
+        children: [
+          'playToggle',
+          'volumePanel',
+          'currentTimeDisplay',
+          'timeDivider',
+          'durationDisplay',
+          'progressControl',
+          'playbackRateMenuButton',
+          'fullscreenToggle'
+        ]
+      },
+      playbackRates: [0.5, 0.75, 1, 1.25, 1.5, 2],
+      nativeControlsForTouch: false
+    }, function() {
+      console.log('Video.js 播放器初始化完成');
       
-      let errorMsg = '视频加载失败';
-      if (currentPlayer.error) {
-        switch(currentPlayer.error.code) {
-          case 1: errorMsg = '用户中止加载'; break;
-          case 2: errorMsg = '网络错误'; break;
-          case 3: errorMsg = '解码错误'; break;
-          case 4: errorMsg = '视频资源不可用'; break;
-          default: errorMsg = '视频加载失败';
-        }
-      }
-      showToast(errorMsg + '，请稍后再试');
-    };
-    
-    const handleCanPlay = () => {
-      console.log('视频可以播放了');
-      showVideoLoading(false);
-    };
-    
-    const handleWaiting = () => {
-      console.log('视频正在缓冲...');
-      showVideoLoading(true);
-    };
-    
-    const handleLoadedMetadata = () => {
-      console.log('视频元数据加载完成');
-      console.log('视频时长:', currentPlayer.duration);
-      console.log('视频宽度:', currentPlayer.videoWidth);
-      console.log('视频高度:', currentPlayer.videoHeight);
-    };
-    
-    const handleProgress = () => {
-      if (currentPlayer.buffered && currentPlayer.buffered.length > 0) {
-        const bufferedEnd = currentPlayer.buffered.end(currentPlayer.buffered.length - 1);
-        const duration = currentPlayer.duration;
-        if (duration > 0) {
-          const bufferedPercent = (bufferedEnd / duration) * 100;
-          console.log(`缓冲进度: ${bufferedPercent.toFixed(1)}%`);
-        }
-      }
-    };
-    
-    currentPlayer.removeEventListener('waiting', handleWaiting);
-    currentPlayer.removeEventListener('canplay', handleCanPlay);
-    currentPlayer.removeEventListener('canplaythrough', handleCanPlay);
-    currentPlayer.removeEventListener('loadeddata', handleCanPlay);
-    currentPlayer.removeEventListener('loadedmetadata', handleLoadedMetadata);
-    currentPlayer.removeEventListener('progress', handleProgress);
-    currentPlayer.removeEventListener('error', handleError);
-    currentPlayer.removeEventListener('abort', handleError);
-    
-    currentPlayer.addEventListener('waiting', handleWaiting);
-    currentPlayer.addEventListener('canplay', handleCanPlay);
-    currentPlayer.addEventListener('canplaythrough', handleCanPlay);
-    currentPlayer.addEventListener('loadeddata', handleCanPlay);
-    currentPlayer.addEventListener('loadedmetadata', handleLoadedMetadata);
-    currentPlayer.addEventListener('progress', handleProgress);
-    currentPlayer.addEventListener('error', handleError);
-    currentPlayer.addEventListener('abort', handleError);
-    
-    try {
-      currentPlayer.src = '';
-      currentPlayer.load();
-    } catch (e) {
-      console.warn('清空src失败:', e);
-    }
-    
-    setTimeout(() => {
-      try {
-        console.log('设置视频URL:', videoUrl);
-        currentPlayer.src = videoUrl;
-        currentPlayer.load();
-      } catch (error) {
-        console.error('设置视频src失败:', error);
+      this.src({
+        type: 'video/mp4',
+        src: videoUrl
+      });
+      
+      this.on('waiting', function() {
+        console.log('视频正在缓冲...');
+        showVideoLoading(true);
+      });
+      
+      this.on('canplay', function() {
+        console.log('视频可以播放了');
         showVideoLoading(false);
-        showToast('视频加载失败，请稍后再试');
-      }
-    }, 100);
+      });
+      
+      this.on('canplaythrough', function() {
+        showVideoLoading(false);
+      });
+      
+      this.on('loadeddata', function() {
+        showVideoLoading(false);
+      });
+      
+      this.on('loadedmetadata', function() {
+        console.log('视频元数据加载完成');
+        console.log('视频时长:', this.duration());
+      });
+      
+      this.on('progress', function() {
+        const buffered = this.buffered();
+        if (buffered.length > 0) {
+          const bufferedEnd = buffered.end(buffered.length - 1);
+          const duration = this.duration();
+          if (duration > 0) {
+            const bufferedPercent = (bufferedEnd / duration) * 100;
+            console.log(`缓冲进度: ${bufferedPercent.toFixed(1)}%`);
+          }
+        }
+      });
+      
+      this.on('error', function() {
+        console.error('视频错误:', this.error());
+        showVideoLoading(false);
+        
+        let errorMsg = '视频加载失败';
+        const err = this.error();
+        if (err) {
+          switch(err.code) {
+            case 1: errorMsg = '用户中止加载'; break;
+            case 2: errorMsg = '网络错误'; break;
+            case 3: errorMsg = '解码错误'; break;
+            case 4: errorMsg = '视频资源不可用'; break;
+            default: errorMsg = '视频加载失败';
+          }
+        }
+        showToast(errorMsg + '，请稍后再试');
+      });
+      
+      this.on('ended', function() {
+        console.log('视频播放结束');
+      });
+      
+      this.load();
+    });
     
   } catch (error) {
     console.error('设置视频失败:', error);
     showVideoLoading(false);
     showToast('视频设置失败，请稍后再试');
+    fallbackToNativePlayer(videoUrl);
+  }
+}
+
+function fallbackToNativePlayer(videoUrl) {
+  try {
+    const videoElement = document.getElementById('video-player');
+    if (!videoElement) return;
+    
+    showVideoLoading(true);
+    
+    videoElement.src = videoUrl;
+    videoElement.load();
+    
+    videoElement.addEventListener('canplay', function() {
+      showVideoLoading(false);
+    });
+    
+    videoElement.addEventListener('error', function() {
+      showVideoLoading(false);
+      showToast('视频加载失败，请稍后再试');
+    });
+    
+  } catch (e) {
+    console.error('备用播放器设置失败:', e);
+    showVideoLoading(false);
   }
 }

@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>历史高光</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@waline/client@2/dist/waline.css" />
+  <link href="https://vjs.zencdn.net/8.10.0/video-js.css" rel="stylesheet" />
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -28,8 +29,8 @@
       <button class="back-btn" id="back-btn">← 返回列表</button>
       <div class="video-card">
         <div class="video-player-wrapper">
-          <video id="video-player" controls playsinline preload="metadata" controlsList="nodownload nofullscreen noremoteplayback">
-            <p>您的浏览器不支持视频播放</p>
+          <video id="video-player" class="video-js vjs-big-play-centered" controls preload="metadata" playsinline data-setup='{"fluid": true, "controlsList": ["nodownload", "nofullscreen", "noremoteplayback"]}'>
+            <p class="vjs-no-js">您的浏览器不支持视频播放，请升级浏览器</p>
           </video>
         </div>
         <div class="video-details">
@@ -45,6 +46,7 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@waline/client@2/dist/waline.js"></script>
+  <script src="https://vjs.zencdn.net/8.10.0/video.min.js"></script>
   <script src="scripts.js"></script>
 </body>
 </html>
