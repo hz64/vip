@@ -259,8 +259,10 @@ async function showVideoPage(videoId) {
   initWaline(videoId);
   
   if (videoData.videoUrl && videoData.videoUrl.trim() !== '') {
-    setupVideo(videoData.videoUrl);
-    showVideoLoading(false);
+    setTimeout(() => {
+      setupVideo(videoData.videoUrl);
+      showVideoLoading(false);
+    }, 50);
   } else {
     showVideoLoading(false);
     showToast('视频链接无效');
