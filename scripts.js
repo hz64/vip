@@ -484,36 +484,44 @@ function setupVideo(videoUrl) {
     
     if (currentPlayer) {
       currentPlayer.dispose();
+      currentPlayer = null;
+      setTimeout(() => {
+        initVideoPlayer(videoPlayer, videoUrl);
+      }, 100);
+    } else {
+      initVideoPlayer(videoPlayer, videoUrl);
     }
-    
-    currentPlayer = videojs('video-player', {
-      controls: true,
-      autoplay: false,
-      preload: 'none',
-      fluid: true,
-      responsive: true
-    });
-    
-    currentPlayer.on('waiting', function() {
-      showVideoLoading(true);
-    });
-    
-    currentPlayer.on('canplay', function() {
-      showVideoLoading(false);
-    });
-    
-    currentPlayer.on('error', function() {
-      showVideoLoading(false);
-      showToast('视频加载失败，请稍后再试');
-    });
-    
-    currentPlayer.src({
-      src: videoUrl,
-      type: 'video/mp4'
-    });
     
   } catch (error) {
     console.error('设置视频失败:', error);
     showToast('视频设置失败，请稍后再试');
   }
+}
+
+function initVideoPlayer(videoElement, videoUrl) {
+  currentPlayer = videojs(videoElement, {
+    controls: true,
+    autoplay: false,
+    preload: 'metadata',
+    fluid: true,
+    responsive: true
+  });
+  
+  currentPlayer.on('waiting', function() {
+    showVideoLoading(true);
+  });
+  
+  currentPlayer.on('canplay', function() {
+    showVideoLoading(false);
+  });
+  
+  currentPlayer.on('error', function() {
+    showVideoLoading(false);
+    showToast('视频加载失败，请稍后再试');
+  });
+  
+  currentPlayer.src({
+    src: videoUrl,
+    type: 'video/mp4'
+  });
 }
