@@ -307,7 +307,6 @@ function showVideoLoading(show) {
       loadingEl = document.createElement('div');
       loadingEl.className = 'video-loading';
       loadingEl.innerHTML = `
-        <div class="loading-spinner-large"></div>
         <div class="loading-text">视频加载中...</div>
       `;
       playerWrapper.appendChild(loadingEl);
