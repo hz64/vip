@@ -4,7 +4,6 @@ let currentPage = 1;
 const videosPerPage = 5;
 const videoDataCache = new Map();
 let walineInstance = null;
-let isNavigating = false;
 let toastTimeout = null;
 
 function getUrlParam(name) {
@@ -158,13 +157,11 @@ async function scanVideoFiles() {
 }
 
 function navigateTo(page, pageNum = null) {
-  if (isNavigating) return;
-  isNavigating = true;
-  
   const url = new URL(window.location.href);
   
   if (page === 'video') {
     url.searchParams.set('id', pageNum);
+    url.searchParams.delete('page');
   } else if (page === 'list') {
     url.searchParams.delete('id');
     if (pageNum && pageNum > 1) {
@@ -175,10 +172,6 @@ function navigateTo(page, pageNum = null) {
   }
   
   window.history.pushState({ page, videoId: pageNum, listPage: currentPage }, '', url);
-  
-  setTimeout(() => {
-    isNavigating = false;
-  }, 100);
 }
 
 window.addEventListener('popstate', function(event) {
@@ -235,9 +228,6 @@ function showListPage(restoreScroll = true) {
 }
 
 async function showVideoPage(videoId) {
-  if (isNavigating) return;
-  isNavigating = true;
-  
   const listPage = document.getElementById('list-page');
   const videoPage = document.getElementById('video-page');
   
@@ -255,7 +245,6 @@ async function showVideoPage(videoId) {
     setTimeout(() => {
       showListPage(false);
     }, 100);
-    isNavigating = false;
     return;
   }
   
@@ -280,8 +269,6 @@ async function showVideoPage(videoId) {
       showListPage(false);
     }, 100);
   }
-  
-  isNavigating = false;
 }
 
 function showVideoLoading(show) {
@@ -449,8 +436,9 @@ function bindVideoEvents() {
     container.addEventListener('click', function() {
       const videoId = this.getAttribute('data-id');
       if (videoId) {
-        navigateTo('video', parseInt(videoId));
-        showVideoPage(parseInt(videoId));
+        const id = parseInt(videoId);
+        navigateTo('video', id);
+        showVideoPage(id);
       }
     });
   });
@@ -460,8 +448,9 @@ function bindVideoEvents() {
     if (videoId) {
       btn.addEventListener('click', function(e) {
         e.stopPropagation();
-        navigateTo('video', parseInt(videoId));
-        showVideoPage(parseInt(videoId));
+        const id = parseInt(videoId);
+        navigateTo('video', id);
+        showVideoPage(id);
       });
     }
   });
