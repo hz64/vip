@@ -487,7 +487,7 @@ function setupVideo(videoUrl) {
       return;
     }
     
-    const videoPlayer = document.getElementById('video-player');
+    let videoPlayer = document.getElementById('video-player');
     if (!videoPlayer) {
       console.error('视频播放器不存在');
       showToast('播放器初始化失败');
@@ -496,34 +496,39 @@ function setupVideo(videoUrl) {
     
     if (currentPlayer) {
       currentPlayer.pause();
-      currentPlayer.src = '';
+      currentPlayer.removeAttribute('src');
       currentPlayer.load();
     }
     
-    currentPlayer = videoPlayer;
-    currentPlayer.src = videoUrl;
-    currentPlayer.load();
+    const newPlayer = videoPlayer.cloneNode(true);
+    videoPlayer.parentNode.replaceChild(newPlayer, videoPlayer);
+    videoPlayer = newPlayer;
     
-    currentPlayer.on('waiting', function() {
+    currentPlayer = videoPlayer;
+    
+    currentPlayer.addEventListener('waiting', function() {
       showVideoLoading(true);
     });
     
-    currentPlayer.on('canplay', function() {
+    currentPlayer.addEventListener('canplay', function() {
       showVideoLoading(false);
     });
     
-    currentPlayer.on('canplaythrough', function() {
+    currentPlayer.addEventListener('canplaythrough', function() {
       showVideoLoading(false);
     });
     
-    currentPlayer.on('error', function() {
+    currentPlayer.addEventListener('error', function() {
       showVideoLoading(false);
       showToast('视频加载失败，请稍后再试');
     });
     
-    currentPlayer.on('loadeddata', function() {
+    currentPlayer.addEventListener('loadeddata', function() {
       showVideoLoading(false);
     });
+    
+    currentPlayer.src = videoUrl;
+    currentPlayer.load();
     
   } catch (error) {
     console.error('设置视频失败:', error);
