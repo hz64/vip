@@ -494,44 +494,106 @@ function setupVideo(videoUrl) {
       return;
     }
     
-    if (currentPlayer) {
-      currentPlayer.pause();
-      currentPlayer.removeAttribute('src');
-      currentPlayer.load();
+    if (currentPlayer && currentPlayer !== videoPlayer) {
+      try {
+        currentPlayer.pause();
+        currentPlayer.src = '';
+        currentPlayer.load();
+      } catch (e) {
+        console.warn('清理旧播放器失败:', e);
+      }
     }
-    
-    const newPlayer = videoPlayer.cloneNode(true);
-    videoPlayer.parentNode.replaceChild(newPlayer, videoPlayer);
-    videoPlayer = newPlayer;
     
     currentPlayer = videoPlayer;
     
-    currentPlayer.addEventListener('waiting', function() {
+    currentPlayer.pause();
+    
+    const handleError = (e) => {
+      console.error('视频错误事件:', e);
+      console.error('错误代码:', currentPlayer.error ? currentPlayer.error.code : '未知');
+      showVideoLoading(false);
+      
+      let errorMsg = '视频加载失败';
+      if (currentPlayer.error) {
+        switch(currentPlayer.error.code) {
+          case 1: errorMsg = '用户中止加载'; break;
+          case 2: errorMsg = '网络错误'; break;
+          case 3: errorMsg = '解码错误'; break;
+          case 4: errorMsg = '视频资源不可用'; break;
+          default: errorMsg = '视频加载失败';
+        }
+      }
+      showToast(errorMsg + '，请稍后再试');
+    };
+    
+    const handleCanPlay = () => {
+      console.log('视频可以播放了');
+      showVideoLoading(false);
+    };
+    
+    const handleWaiting = () => {
+      console.log('视频正在缓冲...');
       showVideoLoading(true);
-    });
+    };
     
-    currentPlayer.addEventListener('canplay', function() {
-      showVideoLoading(false);
-    });
+    const handleLoadedMetadata = () => {
+      console.log('视频元数据加载完成');
+      console.log('视频时长:', currentPlayer.duration);
+      console.log('视频宽度:', currentPlayer.videoWidth);
+      console.log('视频高度:', currentPlayer.videoHeight);
+    };
     
-    currentPlayer.addEventListener('canplaythrough', function() {
-      showVideoLoading(false);
-    });
+    const handleProgress = () => {
+      if (currentPlayer.buffered && currentPlayer.buffered.length > 0) {
+        const bufferedEnd = currentPlayer.buffered.end(currentPlayer.buffered.length - 1);
+        const duration = currentPlayer.duration;
+        if (duration > 0) {
+          const bufferedPercent = (bufferedEnd / duration) * 100;
+          console.log(`缓冲进度: ${bufferedPercent.toFixed(1)}%`);
+        }
+      }
+    };
     
-    currentPlayer.addEventListener('error', function() {
-      showVideoLoading(false);
-      showToast('视频加载失败，请稍后再试');
-    });
+    currentPlayer.removeEventListener('waiting', handleWaiting);
+    currentPlayer.removeEventListener('canplay', handleCanPlay);
+    currentPlayer.removeEventListener('canplaythrough', handleCanPlay);
+    currentPlayer.removeEventListener('loadeddata', handleCanPlay);
+    currentPlayer.removeEventListener('loadedmetadata', handleLoadedMetadata);
+    currentPlayer.removeEventListener('progress', handleProgress);
+    currentPlayer.removeEventListener('error', handleError);
+    currentPlayer.removeEventListener('abort', handleError);
     
-    currentPlayer.addEventListener('loadeddata', function() {
-      showVideoLoading(false);
-    });
+    currentPlayer.addEventListener('waiting', handleWaiting);
+    currentPlayer.addEventListener('canplay', handleCanPlay);
+    currentPlayer.addEventListener('canplaythrough', handleCanPlay);
+    currentPlayer.addEventListener('loadeddata', handleCanPlay);
+    currentPlayer.addEventListener('loadedmetadata', handleLoadedMetadata);
+    currentPlayer.addEventListener('progress', handleProgress);
+    currentPlayer.addEventListener('error', handleError);
+    currentPlayer.addEventListener('abort', handleError);
     
-    currentPlayer.src = videoUrl;
-    currentPlayer.load();
+    try {
+      currentPlayer.src = '';
+      currentPlayer.load();
+    } catch (e) {
+      console.warn('清空src失败:', e);
+    }
+    
+    setTimeout(() => {
+      try {
+        console.log('设置视频URL:', videoUrl);
+        currentPlayer.src = videoUrl;
+        currentPlayer.load();
+      } catch (error) {
+        console.error('设置视频src失败:', error);
+        showVideoLoading(false);
+        showToast('视频加载失败，请稍后再试');
+      }
+    }, 100);
     
   } catch (error) {
     console.error('设置视频失败:', error);
+    showVideoLoading(false);
     showToast('视频设置失败，请稍后再试');
   }
 }
