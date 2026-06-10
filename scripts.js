@@ -6,6 +6,20 @@ const videoDataCache = new Map();
 let walineInstance = null;
 let toastTimeout = null;
 
+document.addEventListener('contextmenu', function(e) {
+  if (e.target.tagName === 'VIDEO') {
+    e.preventDefault();
+    return false;
+  }
+});
+
+document.addEventListener('dragstart', function(e) {
+  if (e.target.tagName === 'VIDEO') {
+    e.preventDefault();
+    return false;
+  }
+});
+
 function getUrlParam(name) {
   const urlParams = new URLSearchParams(window.location.search);
   let value = urlParams.get(name);
@@ -216,6 +230,7 @@ function showListPage(restoreScroll = true) {
   
   if (currentPlayer) {
     currentPlayer.pause();
+    currentPlayer.src = '';
   }
   
   if (restoreScroll && window.scrollY > 0) {
@@ -259,10 +274,7 @@ async function showVideoPage(videoId) {
   initWaline(videoId);
   
   if (videoData.videoUrl && videoData.videoUrl.trim() !== '') {
-    setTimeout(() => {
-      setupVideo(videoData.videoUrl);
-      showVideoLoading(false);
-    }, 50);
+    setupVideo(videoData.videoUrl);
   } else {
     showVideoLoading(false);
     showToast('视频链接无效');
@@ -483,45 +495,38 @@ function setupVideo(videoUrl) {
     }
     
     if (currentPlayer) {
-      currentPlayer.dispose();
-      currentPlayer = null;
-      setTimeout(() => {
-        initVideoPlayer(videoPlayer, videoUrl);
-      }, 100);
-    } else {
-      initVideoPlayer(videoPlayer, videoUrl);
+      currentPlayer.pause();
+      currentPlayer.src = '';
+      currentPlayer.load();
     }
+    
+    currentPlayer = videoPlayer;
+    currentPlayer.src = videoUrl;
+    currentPlayer.load();
+    
+    currentPlayer.on('waiting', function() {
+      showVideoLoading(true);
+    });
+    
+    currentPlayer.on('canplay', function() {
+      showVideoLoading(false);
+    });
+    
+    currentPlayer.on('canplaythrough', function() {
+      showVideoLoading(false);
+    });
+    
+    currentPlayer.on('error', function() {
+      showVideoLoading(false);
+      showToast('视频加载失败，请稍后再试');
+    });
+    
+    currentPlayer.on('loadeddata', function() {
+      showVideoLoading(false);
+    });
     
   } catch (error) {
     console.error('设置视频失败:', error);
     showToast('视频设置失败，请稍后再试');
   }
-}
-
-function initVideoPlayer(videoElement, videoUrl) {
-  currentPlayer = videojs(videoElement, {
-    controls: true,
-    autoplay: false,
-    preload: 'metadata',
-    fluid: true,
-    responsive: true
-  });
-  
-  currentPlayer.on('waiting', function() {
-    showVideoLoading(true);
-  });
-  
-  currentPlayer.on('canplay', function() {
-    showVideoLoading(false);
-  });
-  
-  currentPlayer.on('error', function() {
-    showVideoLoading(false);
-    showToast('视频加载失败，请稍后再试');
-  });
-  
-  currentPlayer.src({
-    src: videoUrl,
-    type: 'video/mp4'
-  });
 }
